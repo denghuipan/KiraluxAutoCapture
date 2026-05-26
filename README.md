@@ -4,43 +4,43 @@
 [![PyQt5](https://img.shields.io/badge/UI-PyQt5-green)](https://www.riverbankcomputing.com/software/pyqt/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey)](https://github.com/denghuipan/KiraluxAutoCapture)
 
-**Kiralux AutoCapture** 是一个集成化的自动图像采集系统，用于光学实验中的自动化数据采集与控制。支持 Thorlabs Kiralux 相机、NKT SuperK 激光器、Yokogawa OSA 光谱仪和功率计等硬件设备的协同控制与自动化扫描。
+**Kiralux AutoCapture** is an integrated automated image acquisition system for optical experiments. It coordinates Thorlabs Kiralux cameras, NKT SuperK lasers, Yokogawa OSA spectrometers, and power meters for automated multi-device scanning and data collection.
 
 ---
 
-## 功能概览
+## Features
 
-| 功能模块 | 说明 |
-|---------|------|
-| **📷 相机控制** | Thorlabs Kiralux 系列相机控制，支持 ROI 设置、曝光/增益调节、连续采集与图像保存 |
-| **🔦 激光控制** | NKT SuperK Extreme + SELECT 激光器控制，支持多通道波长配置、RF 功率调节、随机波长生成 |
-| **📊 光谱分析** | Yokogawa OSA 光谱仪 TCP/IP 控制，支持光谱采集、降维平滑处理 |
-| **⚡ 功率测量** | 功率计数据采集与实时监控 |
-| **🔄 自动扫描循环** | 支持多波长循环扫描、多 ROI 采集、自动曝光调节、数据自动保存（HDF5/TIFF/CSV） |
-| **🛠 硬件测试** | 集成硬件测试面板，快速诊断所有设备连接状态 |
-| **📁 回放分析** | 测试数据回放与后处理功能 |
-
----
-
-## 硬件兼容性
-
-| 设备 | 型号 | 接口 | 状态 |
-|------|------|------|------|
-| Thorlabs Kiralux 相机 | CS505MUP / 全系列 | USB 3.0 (thorlabs_tsi_sdk) | ✅ 已支持 |
-| NKT SuperK 激光器 | SuperK Extreme + SELECT | USB/COM (串口) | ✅ 已支持 |
-| NKT RF 功率模块 | RF 模块 | USB/COM (串口) | ✅ 已支持 |
-| Yokogawa OSA | AQ6370D 系列 | TCP/IP | ✅ 已支持 |
-| 功率计 | 支持 VISA/PyVISA 的设备 | USB/TCP | ✅ 已支持 |
+| Module | Description |
+|--------|-------------|
+| **📷 Camera Control** | Thorlabs Kiralux camera control with ROI configuration, exposure/gain adjustment, live view, and image saving (TIFF / HDF5) |
+| **🔦 Laser Control** | NKT SuperK Extreme + SELECT control with multi-channel wavelength configuration, RF power adjustment, and random wavelength generation |
+| **📊 Spectrum Analysis** | Yokogawa OSA control over TCP/IP with spectrum acquisition and dimensionality reduction (Savitzky-Golay smoothing) |
+| **⚡ Power Meter** | Power meter data acquisition and real-time monitoring via PyVISA |
+| **🔄 Auto Scan Loop** | Multi-wavelength sweep with configurable ROI, auto-exposure, and automatic data saving (HDF5 / TIFF / CSV) |
+| **🛠 Hardware Test** | Integrated hardware diagnostics panel for quick verification of all device connections |
+| **📁 Playback & Analysis** | Test data replay and post-processing tools |
 
 ---
 
-## 环境要求
+## Supported Hardware
 
-- **操作系统**: Windows 10/11（需 thorlabs_tsi_sdk 原生 DLL 支持）
+| Device | Model | Interface | Status |
+|--------|-------|-----------|--------|
+| Thorlabs Kiralux Camera | CS505MUP & full series | USB 3.0 (thorlabs_tsi_sdk) | ✅ Supported |
+| NKT SuperK Laser | SuperK Extreme + SELECT | USB/COM (serial) | ✅ Supported |
+| NKT RF Module | RF module | USB/COM (serial) | ✅ Supported |
+| Yokogawa OSA | AQ6370D series | TCP/IP | ✅ Supported |
+| Power Meter | Devices compatible with PyVISA | USB/TCP | ✅ Supported |
+
+---
+
+## Requirements
+
+- **OS**: Windows 10/11 (requires thorlabs_tsi_sdk native DLL)
 - **Python**: 3.9+
-- **推荐环境**: Conda `DNN` 环境
+- **Recommended environment**: Conda `DNN` environment
 
-### 依赖库
+### Dependencies
 
 ```
 PyQt5>=5.15.0
@@ -58,131 +58,132 @@ zeroconf>=0.130.0
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
 conda activate DNN
 pip install -r requirements.txt
 ```
 
-### 2. 运行程序
+### 2. Run the Application
 
 ```bash
 python main.py
 ```
 
-或在 VS Code 中使用 `Run DNN` 任务。
+Or use the `Run DNN` task in VS Code.
 
-### 3. 打包为可执行文件
+### 3. Build Executable
 
 ```bat
 build_exe.bat
 ```
 
-输出路径：`dist_release\KiraluxAutoCapture_v2\KiraluxAutoCapture_v2.exe`
+Output: `dist_release\KiraluxAutoCapture_v2\KiraluxAutoCapture_v2.exe`
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 autocapture/
-├── main.py                      # 程序入口
-├── requirements.txt             # Python 依赖
-├── KiraluxAutoCapture.spec      # PyInstaller 打包配置
-├── build_exe.bat                # 打包脚本
+├── main.py                      # Application entry point
+├── requirements.txt             # Python dependencies
+├── KiraluxAutoCapture.spec      # PyInstaller build spec
+├── build_exe.bat                # Build script
 ├── .gitignore
-├── MANUAL_en.md                 # 英文用户手册
-├── MANUAL_zh.md                 # 中文用户手册
+├── README.md
+├── MANUAL_en.md                 # User manual (English)
+├── MANUAL_zh.md                 # User manual (Chinese)
 │
-├── core/                        # 核心业务逻辑
-│   ├── app_settings.py          # 应用设置 & 主题配置（暗色/亮色）
-│   ├── camera_support.py        # Kiralux 相机 SDK 封装
-│   ├── h5_store.py              # HDF5 数据存储
-│   ├── hw_tester.py             # 硬件诊断工具
-│   ├── image_contrast.py        # 图像对比度调整
-│   ├── loop_runner.py           # 自动采集循环引擎（QThread）
-│   ├── nkt_support.py           # NKT 激光器 SDK 封装
-│   ├── nkt_thread.py            # NKT 专用线程（避免 IBHandler 冲突）
-│   ├── osa_reduce.py            # OSA 光谱降维/平滑
-│   ├── pm_meter.py              # 功率计控制
-│   ├── power_math.py            # 功率计算工具
-│   ├── rf_power_control.py      # RF 功率控制
-│   ├── roi_postprocess.py       # ROI 后处理
-│   ├── sample_label.py          # 样本标签管理
-│   └── test_data_runner.py      # 测试数据回放引擎
+├── core/                        # Core business logic
+│   ├── app_settings.py          # App settings & theme (dark/light)
+│   ├── camera_support.py        # Kiralux camera SDK wrapper
+│   ├── h5_store.py              # HDF5 data storage
+│   ├── hw_tester.py             # Hardware diagnostics
+│   ├── image_contrast.py        # Image contrast adjustment
+│   ├── loop_runner.py           # Auto acquisition loop engine (QThread)
+│   ├── nkt_support.py           # NKT laser SDK wrapper
+│   ├── nkt_thread.py            # Dedicated NKT thread (avoids IBHandler conflicts)
+│   ├── osa_reduce.py            # OSA spectrum dimensionality reduction / smoothing
+│   ├── pm_meter.py              # Power meter control
+│   ├── power_math.py            # Power calculation utilities
+│   ├── rf_power_control.py      # RF power control
+│   ├── roi_postprocess.py       # ROI post-processing
+│   ├── sample_label.py          # Sample label management
+│   └── test_data_runner.py      # Test data replay engine
 │
-├── ui/                          # 图形界面
-│   ├── main_window.py           # 主窗口
-│   ├── settings_dialog.py       # 设置对话框
-│   ├── style_helpers.py         # 样式辅助
-│   ├── tab_camera.py            # 相机控制标签页
-│   ├── tab_hardware_test.py     # 硬件测试标签页
-│   ├── tab_loop.py              # 自动循环标签页
-│   ├── tab_nkt.py               # NKT 激光控制标签页
-│   ├── tab_osa.py               # OSA 光谱标签页
-│   └── tab_test_data.py         # 测试数据回放标签页
+├── ui/                          # Graphical user interface
+│   ├── main_window.py           # Main application window
+│   ├── settings_dialog.py       # Settings dialog
+│   ├── style_helpers.py         # Style helpers
+│   ├── tab_camera.py            # Camera control tab
+│   ├── tab_hardware_test.py     # Hardware test tab
+│   ├── tab_loop.py              # Auto loop tab
+│   ├── tab_nkt.py               # NKT laser control tab
+│   ├── tab_osa.py               # OSA spectrum tab
+│   └── tab_test_data.py         # Test data replay tab
 │
 └── tools/
-    └── setup_nkt_x64_dll.py     # NKT DLL 环境配置工具
+    └── setup_nkt_x64_dll.py     # NKT DLL environment setup
 ```
 
-**外部依赖目录**（位于 `autocapture` 的父级）：
+**External dependency directories** (located in the project parent folder):
 
 ```
-../Native_64_lib/       # 原生 64 位 DLL
+../Native_64_lib/       # Native 64-bit DLLs
 ../NKT/                 # NKT Photonics SDK + NKTPDLL
 ../NKTPDLL/             # NKTPDLL x64 DLL
 ../thorlabs_tsi_sdk/    # Thorlabs TSI SDK
-../roi_processor/       # ROI 处理器
+../roi_processor/       # ROI processor
 ```
 
 ---
 
-## 使用指南
+## Getting Started
 
-### 首次使用 — 硬件测试
+### First Use — Hardware Test
 
-1. 打开程序后进入 **Hardware Test** 标签页
-2. 点击 **Scan all NKT ports** 扫描激光器 COM 口
-3. 依次完成 Extreme ON → RF ON → Apply emission 测试
-4. 使用 **Capture Test Frame** 测试相机连接
-5. 使用 **Ping OSA** 测试光谱仪网络连接
+1. Open the app and go to the **Hardware Test** tab
+2. Click **Scan all NKT ports** to discover the laser COM ports
+3. Follow the steps: Extreme ON → RF ON → Apply emission
+4. Click **Capture Test Frame** to verify camera connection
+5. Click **Ping OSA** to test spectrometer connectivity
 
-### 自动采集循环
+### Auto Acquisition Loop
 
-1. 在 **Camera** 标签页设置 ROI、曝光、增益
-2. 在 **NKT** 标签页配置激光波长和功率
-3. 切换至 **Loop** 标签页，配置扫描参数
-4. 点击 **Start Loop** 开始自动采集
+1. Switch to the **Camera** tab to set ROI, exposure, and gain
+2. In the **NKT** tab, configure laser wavelengths and power
+3. Go to the **Loop** tab and configure scan parameters
+4. Click **Start Loop** to begin automated acquisition
 
-### 数据格式
+### Data Formats
 
-- **图像数据**: TIFF（单帧）/ HDF5（多帧序列）
-- **光谱数据**: CSV
-- **日志**: 文本日志文件
+- **Images**: TIFF (single frame) / HDF5 (multi-frame sequences)
+- **Spectra**: CSV
+- **Logs**: Plain text log files
 
 ---
 
-## 注意事项
+## Notes
 
-> ⚠ Windows 可能在拔插 USB 后重新分配 COM 口，重新扫描即可恢复连接。
+> ⚠ Windows may reassign COM ports after USB reconnection — simply re-scan to restore connections.
 >
-> ⚠ NKT DLL（NKTP_DLL）必须在专用线程中初始化，避免 Qt IBHandler 跨线程错误。
+> ⚠ The NKT DLL (NKTP_DLL) must be initialized in a dedicated thread to avoid Qt IBHandler cross-thread errors.
 >
-> ⚠ 打包后首次运行可能需要从 `_internal/` 目录复制必要 DLL 到可执行文件同目录。
+> ⚠ After building an executable, some DLLs may need to be copied from `_internal/` to the executable directory.
 
 ---
 
-## 许可
+## License
 
-本项目仅供内部研究使用。
+This project is for internal research use only.
 
 ---
 
-## 联系方式
+## Contact
 
-- 作者: Denghui Pan
+- Author: Denghui Pan
 - GitHub: [denghuipan/KiraluxAutoCapture](https://github.com/denghuipan/KiraluxAutoCapture)
