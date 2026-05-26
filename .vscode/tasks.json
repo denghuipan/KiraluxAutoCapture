@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run main.py (conda DNN)",
+      "type": "shell",
+      "command": "${env:USERPROFILE}\\anaconda3\\envs\\DNN\\python.exe",
+      "args": ["main.py"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

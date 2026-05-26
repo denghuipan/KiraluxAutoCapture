@@ -1,0 +1,13 @@
+# PyInstaller output
+dist/
+dist_release/
+build/
+build_release/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Runtime logs / local artifacts
+osa_log.csv
+*.log
