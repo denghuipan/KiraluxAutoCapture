@@ -2,11 +2,13 @@
 Camera settings tab — Thorlabs Kiralux
 Layout: settings on top, live preview canvas on bottom.
 """
+import os
+
 import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QDoubleSpinBox, QSpinBox,
+    QGroupBox, QLabel,
     QPushButton, QLineEdit, QFileDialog, QCheckBox,
     QComboBox, QSizePolicy, QFrame, QSlider
 )
@@ -18,27 +20,28 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from ui.style_helpers import title, accent, mpl_font_size
+from ui.layout_helpers import (
+    install_scroll_content, configure_form_layout, prepare_group_box, GROUP_SPACING,
+    NoScrollSpinBox, NoScrollDoubleSpinBox,
+)
 from core.camera_support import EXPOSURE_MAX_MS, EXPOSURE_MIN_MS
 
 
 class CameraTab(QWidget):
     def __init__(self):
         super().__init__()
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(8)
+        _, root = install_scroll_content(self)
 
-        # ── Top: settings (horizontal row of group boxes) ─────────────────────
-        settings_row = QHBoxLayout()
-        settings_row.setSpacing(8)
+        # ── Top: settings (stacked group boxes) ─────────────────────────────
+        settings_col = QVBoxLayout()
+        settings_col.setSpacing(GROUP_SPACING)
 
         # Acquisition params
         grp_acq = QGroupBox("Acquisition Parameters")
         form_acq = QFormLayout(grp_acq)
-        form_acq.setHorizontalSpacing(12)
-        form_acq.setVerticalSpacing(6)
+        configure_form_layout(form_acq)
 
-        self.spin_exposure = QDoubleSpinBox()
+        self.spin_exposure = NoScrollDoubleSpinBox()
         self.spin_exposure.setRange(EXPOSURE_MIN_MS, EXPOSURE_MAX_MS)
         self.spin_exposure.setValue(0.06)
         self.spin_exposure.setSuffix("  ms")
@@ -62,12 +65,12 @@ class CameraTab(QWidget):
         exposure_wrap = QWidget()
         exposure_wrap.setLayout(exposure_row)
 
-        self.spin_gain = QSpinBox()
+        self.spin_gain = NoScrollSpinBox()
         self.spin_gain.setRange(0, 480)
         self.spin_gain.setValue(0)
         self.spin_gain.setToolTip("Gain: 0–480  (480 = 48 dB)")
 
-        self.spin_timeout = QSpinBox()
+        self.spin_timeout = NoScrollSpinBox()
         self.spin_timeout.setRange(100, 60000)
         self.spin_timeout.setValue(5000)
         self.spin_timeout.setSuffix("  ms")
@@ -76,13 +79,13 @@ class CameraTab(QWidget):
         form_acq.addRow("Exposure:", exposure_wrap)
         form_acq.addRow("Gain:", self.spin_gain)
         form_acq.addRow("Timeout:", self.spin_timeout)
-        settings_row.addWidget(grp_acq)
+        prepare_group_box(grp_acq)
+        settings_col.addWidget(grp_acq)
 
         # ROI
         grp_roi = QGroupBox("Region of Interest (ROI)")
         form_roi = QFormLayout(grp_roi)
-        form_roi.setHorizontalSpacing(12)
-        form_roi.setVerticalSpacing(6)
+        configure_form_layout(form_roi)
 
         self.chk_full_frame = QCheckBox("Full frame  (4096 × 2160)")
         self.chk_full_frame.setChecked(True)
@@ -92,7 +95,7 @@ class CameraTab(QWidget):
         self.spin_roi = {}
         for label, default, maximum in [("x1", 0, 4096), ("y1", 0, 2160),
                                          ("x2", 4096, 4096), ("y2", 2160, 2160)]:
-            sp = QSpinBox()
+            sp = NoScrollSpinBox()
             sp.setRange(0, maximum)
             sp.setValue(default)
             sp.setPrefix(f"{label}: ")
@@ -102,16 +105,16 @@ class CameraTab(QWidget):
 
         form_roi.addRow(self.chk_full_frame)
         form_roi.addRow("x1,y1,x2,y2:", roi_row)
-        settings_row.addWidget(grp_roi)
+        prepare_group_box(grp_roi)
+        settings_col.addWidget(grp_roi)
 
         # Output
         grp_out = QGroupBox("Output Settings")
         form_out = QFormLayout(grp_out)
-        form_out.setHorizontalSpacing(12)
-        form_out.setVerticalSpacing(6)
+        configure_form_layout(form_out)
 
         dir_row = QHBoxLayout()
-        self.edit_outdir = QLineEdit(".")
+        self.edit_outdir = QLineEdit(os.path.expanduser("~/Desktop/camera_output"))
         self.edit_outdir.setPlaceholderText("Output directory")
         btn_browse = QPushButton("Browse")
         btn_browse.setFixedWidth(60)
@@ -129,26 +132,28 @@ class CameraTab(QWidget):
         form_out.addRow("Directory:", dir_row)
         form_out.addRow("Prefix:", self.edit_prefix)
         form_out.addRow("Format:", self.combo_fmt)
-        settings_row.addWidget(grp_out)
+        prepare_group_box(grp_out)
+        settings_col.addWidget(grp_out)
 
         # Optional inline ROI crop (same algorithm as roi_processor)
         grp_crop = QGroupBox("Auto ROI Crop  (optional, after each frame)")
         form_crop = QFormLayout(grp_crop)
+        configure_form_layout(form_crop)
         self.chk_auto_roi = QCheckBox("Save cropped TIFF / PNG files")
         self.chk_auto_roi.setToolTip(
             "Uses max-sum signal window + centered outer crop (notebook algorithm).\n"
             "Camera ROI should be large enough to contain the signal."
         )
-        self.spin_auto_signal_w = QSpinBox()
+        self.spin_auto_signal_w = NoScrollSpinBox()
         self.spin_auto_signal_w.setRange(1, 10000)
         self.spin_auto_signal_w.setValue(380)
-        self.spin_auto_signal_h = QSpinBox()
+        self.spin_auto_signal_h = NoScrollSpinBox()
         self.spin_auto_signal_h.setRange(1, 10000)
         self.spin_auto_signal_h.setValue(35)
-        self.spin_auto_outer_w = QSpinBox()
+        self.spin_auto_outer_w = NoScrollSpinBox()
         self.spin_auto_outer_w.setRange(1, 10000)
         self.spin_auto_outer_w.setValue(400)
-        self.spin_auto_outer_h = QSpinBox()
+        self.spin_auto_outer_h = NoScrollSpinBox()
         self.spin_auto_outer_h.setRange(1, 10000)
         self.spin_auto_outer_h.setValue(40)
         self.edit_auto_roi_subdir = QLineEdit("cropped")
@@ -173,17 +178,15 @@ class CameraTab(QWidget):
 
         self.chk_h5_contrast = QCheckBox("Apply vmin/vmax contrast before H5 save")
         self.chk_h5_contrast.setToolTip(
-            "Clip to vmin–vmax then scale to 16-bit full range for training data."
+            "Clip cropped image to vmin–vmax (% of frame max) then scale to "
+            "16-bit full range for training data."
         )
-        self.combo_h5_contrast_mode = QComboBox()
-        self.combo_h5_contrast_mode.addItem("% of frame max", "percent_max")
-        self.combo_h5_contrast_mode.addItem("Percentile (p_low–p_high)", "percentile")
         h5_vminmax_row = QHBoxLayout()
-        self.spin_h5_vmin = QSpinBox()
+        self.spin_h5_vmin = NoScrollSpinBox()
         self.spin_h5_vmin.setRange(0, 99)
         self.spin_h5_vmin.setValue(0)
         self.spin_h5_vmin.setSuffix(" %")
-        self.spin_h5_vmax = QSpinBox()
+        self.spin_h5_vmax = NoScrollSpinBox()
         self.spin_h5_vmax.setRange(1, 100)
         self.spin_h5_vmax.setValue(100)
         self.spin_h5_vmax.setSuffix(" %")
@@ -192,31 +195,14 @@ class CameraTab(QWidget):
         h5_vminmax_row.addWidget(QLabel("vmax"))
         h5_vminmax_row.addWidget(self.spin_h5_vmax)
         h5_vminmax_row.addStretch()
-        h5_pct_row = QHBoxLayout()
-        self.spin_h5_p_low = QDoubleSpinBox()
-        self.spin_h5_p_low.setRange(0.0, 99.0)
-        self.spin_h5_p_low.setValue(1.0)
-        self.spin_h5_p_low.setSuffix(" %")
-        self.spin_h5_p_high = QDoubleSpinBox()
-        self.spin_h5_p_high.setRange(1.0, 100.0)
-        self.spin_h5_p_high.setValue(99.0)
-        self.spin_h5_p_high.setSuffix(" %")
-        h5_pct_row.addWidget(QLabel("p_low"))
-        h5_pct_row.addWidget(self.spin_h5_p_low)
-        h5_pct_row.addWidget(QLabel("p_high"))
-        h5_pct_row.addWidget(self.spin_h5_p_high)
-        h5_pct_row.addStretch()
         form_crop.addRow(self.chk_h5_contrast)
-        form_crop.addRow("H5 contrast mode:", self.combo_h5_contrast_mode)
-        form_crop.addRow("H5 vmin / vmax:", h5_vminmax_row)
-        form_crop.addRow("H5 percentile:", h5_pct_row)
+        form_crop.addRow("H5 vmin / vmax (% of frame max):", h5_vminmax_row)
         self.chk_h5_contrast.toggled.connect(self._on_h5_contrast_toggled)
-        self.combo_h5_contrast_mode.currentIndexChanged.connect(self._on_h5_contrast_mode)
         self._on_h5_contrast_toggled(self.chk_h5_contrast.isChecked())
-        self._on_h5_contrast_mode()
-        settings_row.addWidget(grp_crop)
+        prepare_group_box(grp_crop)
+        settings_col.addWidget(grp_crop)
 
-        root.addLayout(settings_row)
+        root.addLayout(settings_col)
 
         # Divider
         line = QFrame()
@@ -235,7 +221,7 @@ class CameraTab(QWidget):
 
         # Contrast controls
         preview_header.addWidget(QLabel("vmin %:"))
-        self.spin_vmin = QSpinBox()
+        self.spin_vmin = NoScrollSpinBox()
         self.spin_vmin.setRange(0, 99)
         self.spin_vmin.setValue(0)
         self.spin_vmin.setSuffix(" %")
@@ -244,7 +230,7 @@ class CameraTab(QWidget):
         preview_header.addWidget(self.spin_vmin)
         preview_header.addSpacing(8)
         preview_header.addWidget(QLabel("vmax %:"))
-        self.spin_vmax = QSpinBox()
+        self.spin_vmax = NoScrollSpinBox()
         self.spin_vmax.setRange(1, 100)
         self.spin_vmax.setValue(100)
         self.spin_vmax.setSuffix(" %")
@@ -259,7 +245,8 @@ class CameraTab(QWidget):
 
         self.figure = Figure(facecolor="#1e1e2e", tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.MinimumExpanding)
+        self.canvas.setMinimumHeight(400)
         self.ax = self.figure.add_subplot(111)
         self._style_axes()
         self.ax.text(
@@ -268,7 +255,7 @@ class CameraTab(QWidget):
             color="#585b70", fontsize=mpl_font_size(1)
         )
         self.canvas.draw()
-        root.addWidget(self.canvas, stretch=1)
+        root.addWidget(self.canvas)
 
     # ── Axes styling ──────────────────────────────────────────────────────────
     def _style_axes(self):
@@ -318,7 +305,7 @@ class CameraTab(QWidget):
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     @staticmethod
-    def _pair_row(spin_a: QSpinBox, spin_b: QSpinBox) -> QHBoxLayout:
+    def _pair_row(spin_a: NoScrollSpinBox, spin_b: NoScrollSpinBox) -> QHBoxLayout:
         row = QHBoxLayout()
         row.addWidget(spin_a)
         row.addWidget(QLabel("×"))
@@ -349,22 +336,8 @@ class CameraTab(QWidget):
             sp.setEnabled(not checked)
 
     def _on_h5_contrast_toggled(self, checked: bool):
-        self.combo_h5_contrast_mode.setEnabled(checked)
-        self._on_h5_contrast_mode()
-
-    def _on_h5_contrast_mode(self):
-        use_pct = (
-            self.chk_h5_contrast.isChecked()
-            and self.combo_h5_contrast_mode.currentData() == "percentile"
-        )
-        use_max = (
-            self.chk_h5_contrast.isChecked()
-            and self.combo_h5_contrast_mode.currentData() == "percent_max"
-        )
-        self.spin_h5_vmin.setEnabled(use_max)
-        self.spin_h5_vmax.setEnabled(use_max)
-        self.spin_h5_p_low.setEnabled(use_pct)
-        self.spin_h5_p_high.setEnabled(use_pct)
+        self.spin_h5_vmin.setEnabled(checked)
+        self.spin_h5_vmax.setEnabled(checked)
 
     def _browse_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Select output directory")
@@ -386,7 +359,7 @@ class CameraTab(QWidget):
             "gain":             self.spin_gain.value(),
             "timeout_ms":       self.spin_timeout.value(),
             "roi":              roi,
-            "out_dir":          self.edit_outdir.text() or ".",
+            "out_dir":          self.edit_outdir.text().strip() or os.path.expanduser("~/Desktop/camera_output"),
             "file_prefix":      self.edit_prefix.text() or "img_loop",
             "img_format":       fmt_map[self.combo_fmt.currentIndex()],
             # Optional inline ROI crop (roi_processor algorithm)
@@ -403,9 +376,7 @@ class CameraTab(QWidget):
             "auto_roi_h5_enabled":     self.chk_auto_roi_h5.isChecked(),
             "auto_roi_h5_filename":    self.edit_auto_roi_h5.text().strip() or "images.h5",
             "auto_roi_h5_contrast_enabled": self.chk_h5_contrast.isChecked(),
-            "auto_roi_h5_contrast_mode": self.combo_h5_contrast_mode.currentData(),
+            "auto_roi_h5_contrast_mode": "percent_max",
             "auto_roi_h5_vmin_pct":    self.spin_h5_vmin.value(),
             "auto_roi_h5_vmax_pct":    self.spin_h5_vmax.value(),
-            "auto_roi_h5_p_low":       self.spin_h5_p_low.value(),
-            "auto_roi_h5_p_high":      self.spin_h5_p_high.value(),
         }

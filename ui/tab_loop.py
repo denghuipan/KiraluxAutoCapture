@@ -6,14 +6,15 @@ import copy
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QSpinBox, QDoubleSpinBox,
+    QGroupBox, QLabel,
     QComboBox, QSizePolicy, QCheckBox, QPushButton
 )
 from PyQt5.QtCore import Qt
 
 from ui.style_helpers import checkbox_emphasis, muted, accent, success, error
+from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox
 
-MODE_LABELS = ("Random Multi-Peak", "Manual Multi-Peak", "Single Peak Scan")
+MODE_LABELS = ("Random Multi-Peak", "Manual Multi-Peak", "Single Peak Scan", "Broadband")
 
 
 class LoopTab(QWidget):
@@ -23,14 +24,13 @@ class LoopTab(QWidget):
         self._saved_rounds: dict[int, dict] = {}
         self._loading_round = False
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        _, root = install_scroll_content(self)
 
         # ── Training Strategy ─────────────────────────────────────────────
         grp_train = QGroupBox("Training Strategy")
         train_layout = QVBoxLayout(grp_train)
-        train_layout.setSpacing(8)
+        train_layout.setSpacing(10)
+        train_layout.setContentsMargins(12, 14, 12, 12)
 
         self.chk_training = QCheckBox(
             "Enable multi-round training  (each round can use a different capture mode)"
@@ -40,10 +40,9 @@ class LoopTab(QWidget):
         train_layout.addWidget(self.chk_training)
 
         train_form = QFormLayout()
-        train_form.setHorizontalSpacing(16)
-        train_form.setVerticalSpacing(6)
+        configure_form_layout(train_form)
 
-        self.spin_n_rounds = QSpinBox()
+        self.spin_n_rounds = NoScrollSpinBox()
         self.spin_n_rounds.setRange(1, 50)
         self.spin_n_rounds.setValue(4)
         self.spin_n_rounds.valueChanged.connect(self._on_n_rounds_changed)
@@ -88,45 +87,49 @@ class LoopTab(QWidget):
         train_layout.addWidget(self.btn_save_round)
         train_layout.addWidget(self.lbl_round_hint)
         train_layout.addWidget(self.lbl_round_status)
+        prepare_group_box(grp_train)
         root.addWidget(grp_train)
 
         # Mode
         grp_mode = QGroupBox("Capture Mode")
         mode_layout = QHBoxLayout(grp_mode)
+        mode_layout.setSpacing(10)
+        mode_layout.setContentsMargins(12, 14, 12, 12)
         mode_layout.addWidget(QLabel("Mode:"))
         self.combo_mode = QComboBox()
         self.combo_mode.addItems([
             "Random Multi-Peak  (reproducible seed)",
             "Manual Multi-Peak  (from NKT tab)",
             "Single Peak Scan  (1ch wavelength sweep)",
+            "Broadband  (8ch, 10 nm span)",
         ])
         self.combo_mode.setMinimumWidth(300)
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
         mode_layout.addWidget(self.combo_mode)
         mode_layout.addStretch()
+        prepare_group_box(grp_mode)
         root.addWidget(grp_mode)
 
         # Random config
         self.grp_random = QGroupBox("Random Sequence Config")
         form_r = QFormLayout(self.grp_random)
-        form_r.setHorizontalSpacing(16)
-        form_r.setVerticalSpacing(8)
+        configure_form_layout(form_r)
 
-        self.spin_seed = QSpinBox()
+        self.spin_seed = NoScrollSpinBox()
         self.spin_seed.setRange(0, 999999)
         self.spin_seed.setValue(42)
 
-        self.spin_steps = QSpinBox()
+        self.spin_steps = NoScrollSpinBox()
         self.spin_steps.setRange(1, 10000)
         self.spin_steps.setValue(50)
 
-        self.spin_wl_min = QDoubleSpinBox()
+        self.spin_wl_min = NoScrollDoubleSpinBox()
         self.spin_wl_min.setRange(400, 2000)
         self.spin_wl_min.setValue(620.0)
         self.spin_wl_min.setSuffix("  nm")
         self.spin_wl_min.setDecimals(1)
 
-        self.spin_wl_max = QDoubleSpinBox()
+        self.spin_wl_max = NoScrollDoubleSpinBox()
         self.spin_wl_max.setRange(400, 2000)
         self.spin_wl_max.setValue(690.0)
         self.spin_wl_max.setSuffix("  nm")
@@ -147,7 +150,7 @@ class LoopTab(QWidget):
         self.combo_spacing.setFixedWidth(130)
         self.combo_spacing.currentIndexChanged.connect(self._on_spacing_changed)
 
-        self.spin_wl_step = QDoubleSpinBox()
+        self.spin_wl_step = NoScrollDoubleSpinBox()
         self.spin_wl_step.setRange(0.1, 100)
         self.spin_wl_step.setValue(5.0)
         self.spin_wl_step.setSuffix("  nm")
@@ -156,7 +159,7 @@ class LoopTab(QWidget):
 
         self.lbl_grid_step = QLabel("step:")
 
-        self.spin_spacing_min = QDoubleSpinBox()
+        self.spin_spacing_min = NoScrollDoubleSpinBox()
         self.spin_spacing_min.setRange(0.1, 100)
         self.spin_spacing_min.setValue(0.1)
         self.spin_spacing_min.setSuffix("  nm")
@@ -165,7 +168,7 @@ class LoopTab(QWidget):
 
         self.lbl_spacing_dash = QLabel(" – ")
 
-        self.spin_spacing_max = QDoubleSpinBox()
+        self.spin_spacing_max = NoScrollDoubleSpinBox()
         self.spin_spacing_max.setRange(0.1, 100)
         self.spin_spacing_max.setValue(1.0)
         self.spin_spacing_max.setSuffix("  nm")
@@ -185,11 +188,11 @@ class LoopTab(QWidget):
         spacing_row.addWidget(self.spin_spacing_max)
         spacing_row.addStretch()
 
-        self.spin_ch_min = QSpinBox()
+        self.spin_ch_min = NoScrollSpinBox()
         self.spin_ch_min.setRange(1, 8)
         self.spin_ch_min.setValue(2)
 
-        self.spin_ch_max = QSpinBox()
+        self.spin_ch_max = NoScrollSpinBox()
         self.spin_ch_max.setRange(1, 8)
         self.spin_ch_max.setValue(8)
 
@@ -200,11 +203,11 @@ class LoopTab(QWidget):
         ch_row.addWidget(QLabel("channels"))
         ch_row.addStretch()
 
-        self.spin_amp_min = QSpinBox()
+        self.spin_amp_min = NoScrollSpinBox()
         self.spin_amp_min.setRange(0, 1000)
         self.spin_amp_min.setValue(200)
 
-        self.spin_amp_max = QSpinBox()
+        self.spin_amp_max = NoScrollSpinBox()
         self.spin_amp_max.setRange(0, 1000)
         self.spin_amp_max.setValue(1000)
 
@@ -221,21 +224,21 @@ class LoopTab(QWidget):
         form_r.addRow("Channel spacing:", spacing_row)
         form_r.addRow("Channels per step:", ch_row)
         form_r.addRow("Amplitude range:", amp_row)
+        prepare_group_box(self.grp_random)
         root.addWidget(self.grp_random)
 
         # Single Peak Scan config
         self.grp_single = QGroupBox("Single Peak Scan Config")
         form_s = QFormLayout(self.grp_single)
-        form_s.setHorizontalSpacing(16)
-        form_s.setVerticalSpacing(8)
+        configure_form_layout(form_s)
 
-        self.spin_single_wl_min = QDoubleSpinBox()
+        self.spin_single_wl_min = NoScrollDoubleSpinBox()
         self.spin_single_wl_min.setRange(400, 2000)
         self.spin_single_wl_min.setValue(620.0)
         self.spin_single_wl_min.setSuffix("  nm")
         self.spin_single_wl_min.setDecimals(1)
 
-        self.spin_single_wl_max = QDoubleSpinBox()
+        self.spin_single_wl_max = NoScrollDoubleSpinBox()
         self.spin_single_wl_max.setRange(400, 2000)
         self.spin_single_wl_max.setValue(690.0)
         self.spin_single_wl_max.setSuffix("  nm")
@@ -247,7 +250,7 @@ class LoopTab(QWidget):
         wl_range_row.addWidget(self.spin_single_wl_max)
         wl_range_row.addStretch()
 
-        self.spin_single_step = QDoubleSpinBox()
+        self.spin_single_step = NoScrollDoubleSpinBox()
         self.spin_single_step.setRange(0.1, 100)
         self.spin_single_step.setValue(0.5)
         self.spin_single_step.setSuffix("  nm")
@@ -255,7 +258,7 @@ class LoopTab(QWidget):
         self.spin_single_step.setSingleStep(0.1)
         self.spin_single_step.setToolTip("Wavelength step (min 0.1 nm)")
 
-        self.spin_single_amplitude = QSpinBox()
+        self.spin_single_amplitude = NoScrollSpinBox()
         self.spin_single_amplitude.setRange(0, 1000)
         self.spin_single_amplitude.setValue(1000)
         self.spin_single_amplitude.setToolTip("RF channel amplitude (0 = 0%, 1000 = 100%)")
@@ -264,25 +267,147 @@ class LoopTab(QWidget):
         form_s.addRow("End wavelength:", self.spin_single_wl_max)
         form_s.addRow("Step:", self.spin_single_step)
         form_s.addRow("RF amplitude:", self.spin_single_amplitude)
+        prepare_group_box(self.grp_single)
         root.addWidget(self.grp_single)
+
+        # ── Broadband config ──────────────────────────────────────────────
+        self.grp_broadband = QGroupBox("Broadband Config  (8 ch, 10 nm span)")
+        form_bb = QFormLayout(self.grp_broadband)
+        configure_form_layout(form_bb)
+
+        self.spin_bb_steps = NoScrollSpinBox()
+        self.spin_bb_steps.setRange(1, 10000)
+        self.spin_bb_steps.setValue(50)
+
+        self.spin_bb_wl_min = NoScrollDoubleSpinBox()
+        self.spin_bb_wl_min.setRange(500, 900)
+        self.spin_bb_wl_min.setValue(620.0)
+        self.spin_bb_wl_min.setSuffix("  nm")
+        self.spin_bb_wl_min.setDecimals(1)
+
+        self.spin_bb_wl_max = NoScrollDoubleSpinBox()
+        self.spin_bb_wl_max.setRange(500, 900)
+        self.spin_bb_wl_max.setValue(670.0)
+        self.spin_bb_wl_max.setSuffix("  nm")
+        self.spin_bb_wl_max.setDecimals(1)
+
+        _bb_wl_ctr = QWidget()
+        _bb_wl_lay = QHBoxLayout(_bb_wl_ctr)
+        _bb_wl_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_wl_lay.addWidget(self.spin_bb_wl_min)
+        _bb_wl_lay.addWidget(QLabel(" to "))
+        _bb_wl_lay.addWidget(self.spin_bb_wl_max)
+        _bb_wl_lay.addStretch()
+
+        self.chk_bb_fixed_center = QCheckBox("Use fixed center:")
+        self.chk_bb_fixed_center.setChecked(False)
+        self.chk_bb_fixed_center.toggled.connect(self._on_bb_fixed_center_toggled)
+
+        self.spin_bb_center_nm = NoScrollDoubleSpinBox()
+        self.spin_bb_center_nm.setRange(500, 900)
+        self.spin_bb_center_nm.setValue(645.0)
+        self.spin_bb_center_nm.setSuffix("  nm")
+        self.spin_bb_center_nm.setDecimals(1)
+
+        _bb_center_ctr = QWidget()
+        _bb_center_lay = QHBoxLayout(_bb_center_ctr)
+        _bb_center_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_center_lay.addWidget(self.chk_bb_fixed_center)
+        _bb_center_lay.addWidget(self.spin_bb_center_nm)
+        _bb_center_lay.addStretch()
+
+        self.spin_bb_spacing_nm = NoScrollDoubleSpinBox()
+        self.spin_bb_spacing_nm.setRange(0.1, 5.0)
+        self.spin_bb_spacing_nm.setValue(1.0)
+        self.spin_bb_spacing_nm.setSuffix("  nm")
+        self.spin_bb_spacing_nm.setDecimals(1)
+        self.spin_bb_spacing_nm.setSingleStep(0.1)
+
+        self.chk_bb_auto_spacing = QCheckBox("Auto (always span 10 nm)")
+        self.chk_bb_auto_spacing.setChecked(False)
+        self.chk_bb_auto_spacing.toggled.connect(self._on_bb_auto_spacing_toggled)
+
+        _bb_sp_ctr = QWidget()
+        _bb_sp_lay = QHBoxLayout(_bb_sp_ctr)
+        _bb_sp_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_sp_lay.addWidget(self.spin_bb_spacing_nm)
+        _bb_sp_lay.addSpacing(8)
+        _bb_sp_lay.addWidget(self.chk_bb_auto_spacing)
+        _bb_sp_lay.addStretch()
+
+        self.combo_bb_amp_mode = QComboBox()
+        self.combo_bb_amp_mode.addItems(["All equal", "Random", "Manual per-channel"])
+        self.combo_bb_amp_mode.currentIndexChanged.connect(self._on_bb_amp_mode_changed)
+
+        self._lbl_bb_amp_equal = QLabel("Amplitude:")
+        self.spin_bb_amp_equal = NoScrollSpinBox()
+        self.spin_bb_amp_equal.setRange(0, 1000)
+        self.spin_bb_amp_equal.setValue(500)
+
+        self._lbl_bb_amp_rand = QLabel("Amp range:")
+        self.spin_bb_amp_min = NoScrollSpinBox()
+        self.spin_bb_amp_min.setRange(0, 1000)
+        self.spin_bb_amp_min.setValue(200)
+        self.spin_bb_amp_max = NoScrollSpinBox()
+        self.spin_bb_amp_max.setRange(0, 1000)
+        self.spin_bb_amp_max.setValue(1000)
+
+        self._bb_amp_rand_widget = QWidget()
+        _bb_rand_lay = QHBoxLayout(self._bb_amp_rand_widget)
+        _bb_rand_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_rand_lay.addWidget(self.spin_bb_amp_min)
+        _bb_rand_lay.addWidget(QLabel(" – "))
+        _bb_rand_lay.addWidget(self.spin_bb_amp_max)
+        _bb_rand_lay.addStretch()
+
+        self._lbl_bb_amp_manual = QLabel("Ch amps (1–8):")
+        self.spins_bb_amp_manual = []
+        self._bb_amp_manual_widget = QWidget()
+        _bb_manual_lay = QHBoxLayout(self._bb_amp_manual_widget)
+        _bb_manual_lay.setContentsMargins(0, 0, 0, 0)
+        for _bbi in range(8):
+            _sp = NoScrollSpinBox()
+            _sp.setRange(0, 1000)
+            _sp.setValue(500)
+            _sp.setFixedWidth(52)
+            _sp.setToolTip(f"Channel {_bbi + 1} amplitude (0–1000)")
+            self.spins_bb_amp_manual.append(_sp)
+            _bb_manual_lay.addWidget(_sp)
+        _bb_manual_lay.addStretch()
+
+        self.spin_bb_emission_pct = NoScrollSpinBox()
+        self.spin_bb_emission_pct.setRange(0, 100)
+        self.spin_bb_emission_pct.setValue(100)
+        self.spin_bb_emission_pct.setSuffix("  %")
+
+        form_bb.addRow("N steps:", self.spin_bb_steps)
+        form_bb.addRow("Center range:", _bb_wl_ctr)
+        form_bb.addRow("Fixed center:", _bb_center_ctr)
+        form_bb.addRow("Channel spacing:", _bb_sp_ctr)
+        form_bb.addRow("Amplitude mode:", self.combo_bb_amp_mode)
+        form_bb.addRow(self._lbl_bb_amp_equal, self.spin_bb_amp_equal)
+        form_bb.addRow(self._lbl_bb_amp_rand, self._bb_amp_rand_widget)
+        form_bb.addRow(self._lbl_bb_amp_manual, self._bb_amp_manual_widget)
+        form_bb.addRow("Emission:", self.spin_bb_emission_pct)
+        prepare_group_box(self.grp_broadband)
+        root.addWidget(self.grp_broadband)
 
         # Repeat & timing
         grp_rep = QGroupBox("Repeat & Timing")
         form_rep = QFormLayout(grp_rep)
-        form_rep.setHorizontalSpacing(16)
-        form_rep.setVerticalSpacing(8)
+        configure_form_layout(form_rep)
 
-        self.spin_repeats = QSpinBox()
+        self.spin_repeats = NoScrollSpinBox()
         self.spin_repeats.setRange(1, 1000)
         self.spin_repeats.setValue(5)
 
-        self.spin_start_idx = QSpinBox()
+        self.spin_start_idx = NoScrollSpinBox()
         self.spin_start_idx.setRange(0, 99999)
         self.spin_start_idx.setValue(1)
         self.spin_start_idx.setToolTip(
             "Index offset — useful to resume a partially completed run")
 
-        self.spin_settle = QDoubleSpinBox()
+        self.spin_settle = NoScrollDoubleSpinBox()
         self.spin_settle.setRange(0.0, 10.0)
         self.spin_settle.setValue(0.5)
         self.spin_settle.setSuffix("  s")
@@ -290,9 +415,20 @@ class LoopTab(QWidget):
         self.spin_settle.setToolTip(
             "Wait after NKT config change before capturing")
 
+        self.spin_camera_sleep = NoScrollDoubleSpinBox()
+        self.spin_camera_sleep.setRange(0.0, 60.0)
+        self.spin_camera_sleep.setValue(0.1)
+        self.spin_camera_sleep.setSuffix("  s")
+        self.spin_camera_sleep.setDecimals(3)
+        self.spin_camera_sleep.setSingleStep(0.01)
+        self.spin_camera_sleep.setToolTip(
+            "Delay after each camera frame is saved before the next capture")
+
         form_rep.addRow("Repeats per config:", self.spin_repeats)
         form_rep.addRow("Start index offset:", self.spin_start_idx)
         form_rep.addRow("Laser settle time:", self.spin_settle)
+        form_rep.addRow("Camera inter-frame delay (s):", self.spin_camera_sleep)
+        prepare_group_box(grp_rep)
         root.addWidget(grp_rep)
 
         # Summary
@@ -302,25 +438,31 @@ class LoopTab(QWidget):
         self.lbl_summary.setWordWrap(True)
         root.addWidget(self.lbl_summary)
 
-        root.addStretch()
-
         for w in [self.spin_steps, self.spin_repeats, self.spin_seed,
                   self.spin_wl_min, self.spin_wl_max, self.spin_wl_step,
                   self.spin_spacing_min, self.spin_spacing_max,
                   self.spin_ch_min, self.spin_ch_max,
                   self.spin_amp_min, self.spin_amp_max,
                   self.spin_single_wl_min, self.spin_single_wl_max,
-                  self.spin_single_step, self.spin_single_amplitude]:
+                  self.spin_single_step, self.spin_single_amplitude,
+                  self.spin_bb_steps, self.spin_bb_wl_min, self.spin_bb_wl_max,
+                  self.spin_bb_center_nm, self.spin_bb_spacing_nm,
+                  self.spin_bb_amp_equal, self.spin_bb_amp_min, self.spin_bb_amp_max,
+                  self.spin_bb_emission_pct] + self.spins_bb_amp_manual:
             w.valueChanged.connect(self._update_summary)
         self._rebuild_round_combo()
         self._on_training_toggled(False)
         self._update_summary()
         self._on_mode_changed(0)
         self._on_spacing_changed(0)
+        self._on_bb_fixed_center_toggled(False)
+        self._on_bb_auto_spacing_toggled(False)
+        self._on_bb_amp_mode_changed(0)
 
     def _on_mode_changed(self, idx: int):
         self.grp_random.setVisible(idx == 0)
         self.grp_single.setVisible(idx == 2)
+        self.grp_broadband.setVisible(idx == 3)
         self._update_summary()
 
     def _on_spacing_changed(self, idx: int):
@@ -331,6 +473,23 @@ class LoopTab(QWidget):
         self.spin_spacing_min.setVisible(not is_grid)
         self.lbl_spacing_dash.setVisible(not is_grid)
         self.spin_spacing_max.setVisible(not is_grid)
+        self._update_summary()
+
+    def _on_bb_fixed_center_toggled(self, checked: bool):
+        self.spin_bb_center_nm.setEnabled(checked)
+        self._update_summary()
+
+    def _on_bb_auto_spacing_toggled(self, checked: bool):
+        self.spin_bb_spacing_nm.setEnabled(not checked)
+        self._update_summary()
+
+    def _on_bb_amp_mode_changed(self, idx: int):
+        self._lbl_bb_amp_equal.setVisible(idx == 0)
+        self.spin_bb_amp_equal.setVisible(idx == 0)
+        self._lbl_bb_amp_rand.setVisible(idx == 1)
+        self._bb_amp_rand_widget.setVisible(idx == 1)
+        self._lbl_bb_amp_manual.setVisible(idx == 2)
+        self._bb_amp_manual_widget.setVisible(idx == 2)
         self._update_summary()
 
     def _update_summary(self):
@@ -374,6 +533,40 @@ class LoopTab(QWidget):
                 f"step {step:.1f} nm  =  {n_steps} wavelengths\n"
                 f"  x {n_repeats} repeats  =  {total} total captures\n"
                 f"  RF amplitude: {amp}  ({amp/10:.0f}%)"
+            )
+            return
+
+        if mode == 3:
+            n_steps = self.spin_bb_steps.value()
+            total = n_steps * n_repeats
+            if self.chk_bb_fixed_center.isChecked():
+                center_info = f"center={self.spin_bb_center_nm.value():.1f} nm (fixed)"
+            else:
+                center_info = (
+                    f"center in [{self.spin_bb_wl_min.value():.1f}–"
+                    f"{self.spin_bb_wl_max.value():.1f}] nm (random)"
+                )
+            if self.chk_bb_auto_spacing.isChecked():
+                spacing_info = f"spacing=auto (≈{10/7:.2f} nm, span=10 nm)"
+            else:
+                _sp_nm = self.spin_bb_spacing_nm.value()
+                spacing_info = f"spacing={_sp_nm:.1f} nm (span≈{_sp_nm * 7:.1f} nm)"
+            amp_idx = self.combo_bb_amp_mode.currentIndex()
+            if amp_idx == 0:
+                amp_info = f"amp={self.spin_bb_amp_equal.value()} (all equal)"
+            elif amp_idx == 1:
+                amp_info = (
+                    f"amp={self.spin_bb_amp_min.value()}–"
+                    f"{self.spin_bb_amp_max.value()} (random)"
+                )
+            else:
+                _vals = [w.value() for w in self.spins_bb_amp_manual]
+                amp_info = f"amp=[{','.join(str(v) for v in _vals)}] (manual)"
+            self.lbl_summary.setText(
+                f"  Broadband: 8 channels, 10 nm span\n"
+                f"  {center_info},  {spacing_info}\n"
+                f"  {n_steps} configs × {n_repeats} repeats = {total} captures\n"
+                f"  {amp_info}"
             )
             return
 
@@ -422,6 +615,8 @@ class LoopTab(QWidget):
             wl_max = self.spin_single_wl_max.value()
             step   = self.spin_single_step.value()
             n_steps = max(1, math.floor((wl_max - wl_min) / step) + 1)
+        elif mode == 3:
+            n_steps = self.spin_bb_steps.value()
         else:
             n_steps = self.spin_steps.value()
 
@@ -441,7 +636,8 @@ class LoopTab(QWidget):
             "n_ch_max":       self.spin_ch_max.value(),
             "amp_min":        self.spin_amp_min.value(),
             "amp_max":        self.spin_amp_max.value(),
-            "laser_settle_s": self.spin_settle.value(),
+            "laser_settle_s":  self.spin_settle.value(),
+            "camera_sleep_s":  self.spin_camera_sleep.value(),
         }
 
         if mode == 2:
@@ -449,6 +645,23 @@ class LoopTab(QWidget):
             base["single_wl_max"]  = self.spin_single_wl_max.value()
             base["single_step"]    = self.spin_single_step.value()
             base["single_amp"]     = self.spin_single_amplitude.value()
+
+        if mode == 3:
+            _amp_mode_labels = ["equal", "random", "manual"]
+            base.update({
+                "bb_wl_min":       self.spin_bb_wl_min.value(),
+                "bb_wl_max":       self.spin_bb_wl_max.value(),
+                "bb_fixed_center": self.chk_bb_fixed_center.isChecked(),
+                "bb_center_nm":    self.spin_bb_center_nm.value(),
+                "bb_spacing_nm":   self.spin_bb_spacing_nm.value(),
+                "bb_auto_spacing": self.chk_bb_auto_spacing.isChecked(),
+                "bb_amp_mode":     _amp_mode_labels[self.combo_bb_amp_mode.currentIndex()],
+                "bb_amp_equal":    self.spin_bb_amp_equal.value(),
+                "bb_amp_min":      self.spin_bb_amp_min.value(),
+                "bb_amp_max":      self.spin_bb_amp_max.value(),
+                "bb_amp_manual":   [w.value() for w in self.spins_bb_amp_manual],
+                "bb_emission_pct": self.spin_bb_emission_pct.value(),
+            })
 
         return base
 
@@ -543,6 +756,7 @@ class LoopTab(QWidget):
             self.spin_repeats.setValue(int(cfg.get("n_repeats", 5)))
             self.spin_start_idx.setValue(int(cfg.get("start_index", 1)))
             self.spin_settle.setValue(float(cfg.get("laser_settle_s", 0.5)))
+            self.spin_camera_sleep.setValue(float(cfg.get("camera_sleep_s", 0.1)))
             self.spin_wl_min.setValue(float(cfg.get("wl_min", 620.0)))
             self.spin_wl_max.setValue(float(cfg.get("wl_max", 690.0)))
             self.combo_spacing.setCurrentIndex(int(cfg.get("spacing_mode", 0)))
@@ -557,6 +771,25 @@ class LoopTab(QWidget):
             self.spin_single_wl_max.setValue(float(cfg.get("single_wl_max", 690.0)))
             self.spin_single_step.setValue(float(cfg.get("single_step", 0.5)))
             self.spin_single_amplitude.setValue(int(cfg.get("single_amp", 1000)))
+            # Broadband fields (always restore so round-switching works)
+            if cfg.get("mode") == 3:
+                self.spin_bb_steps.setValue(int(cfg.get("n_steps", 50)))
+            self.spin_bb_wl_min.setValue(float(cfg.get("bb_wl_min", 620.0)))
+            self.spin_bb_wl_max.setValue(float(cfg.get("bb_wl_max", 670.0)))
+            self.chk_bb_fixed_center.setChecked(bool(cfg.get("bb_fixed_center", False)))
+            self.spin_bb_center_nm.setValue(float(cfg.get("bb_center_nm", 645.0)))
+            self.spin_bb_spacing_nm.setValue(float(cfg.get("bb_spacing_nm", 1.0)))
+            self.chk_bb_auto_spacing.setChecked(bool(cfg.get("bb_auto_spacing", False)))
+            _amp_mode_map = {"equal": 0, "random": 1, "manual": 2}
+            self.combo_bb_amp_mode.setCurrentIndex(
+                _amp_mode_map.get(cfg.get("bb_amp_mode", "equal"), 0))
+            self.spin_bb_amp_equal.setValue(int(cfg.get("bb_amp_equal", 500)))
+            self.spin_bb_amp_min.setValue(int(cfg.get("bb_amp_min", 200)))
+            self.spin_bb_amp_max.setValue(int(cfg.get("bb_amp_max", 1000)))
+            _bb_manual = cfg.get("bb_amp_manual", [500] * 8)
+            for _bmi, _bsp in enumerate(self.spins_bb_amp_manual):
+                _bsp.setValue(int(_bb_manual[_bmi]) if _bmi < len(_bb_manual) else 500)
+            self.spin_bb_emission_pct.setValue(int(cfg.get("bb_emission_pct", 100)))
             if self._main_win and hasattr(self._main_win, "nkt_tab"):
                 wls = cfg.get("manual_wavelengths")
                 amps = cfg.get("manual_amplitudes")

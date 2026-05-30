@@ -11,8 +11,8 @@ import numpy as np
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QPushButton, QDoubleSpinBox,
-    QSpinBox, QSlider, QSizePolicy, QFrame, QLineEdit, QMessageBox
+    QGroupBox, QLabel, QPushButton,
+    QSlider, QSizePolicy, QFrame, QLineEdit, QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
@@ -21,8 +21,9 @@ matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from core.hw_tester import CameraTestWorker, OSAPingWorker, PMTestWorker
+from core.hw_tester import CameraTestWorker, OSAPingWorker, PMTestWorker, PMZeroWorker
 from ui.style_helpers import title, muted, warning, mpl_font_size
+from ui.layout_helpers import install_scroll_content, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -73,15 +74,15 @@ class HardwareTestTab(QWidget):
         self._osa_worker   = None
         self._pm_worker    = None
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(14)
+        _, root = install_scroll_content(self)
 
         root.addWidget(_section_title("Hardware Status & Test"))
 
         # ── NKT ──────────────────────────────────────────────────────────────
         grp_nkt = QGroupBox("NKT SuperK Laser")
         nkt_layout = QVBoxLayout(grp_nkt)
+        nkt_layout.setSpacing(10)
+        nkt_layout.setContentsMargins(12, 14, 12, 12)
 
         port_hint = QLabel(
             "⚠ Always double-check the COM port — Windows may reassign it after replug.\n"
@@ -146,7 +147,7 @@ class HardwareTestTab(QWidget):
 
         wl_row = QHBoxLayout()
         wl_row.addWidget(QLabel("Step 3 — Wavelength:"))
-        self.nkt_wl = QDoubleSpinBox()
+        self.nkt_wl = NoScrollDoubleSpinBox()
         self.nkt_wl.setRange(400, 1100)
         self.nkt_wl.setValue(670.0)
         self.nkt_wl.setSuffix(" nm")
@@ -195,11 +196,14 @@ class HardwareTestTab(QWidget):
         btn_off_row.addStretch()
         nkt_layout.addLayout(btn_off_row)
 
+        prepare_group_box(grp_nkt)
         root.addWidget(grp_nkt)
 
         # ── Camera ────────────────────────────────────────────────────────────
         grp_cam = QGroupBox("Camera  (Thorlabs Kiralux)")
         cam_layout = QVBoxLayout(grp_cam)
+        cam_layout.setSpacing(10)
+        cam_layout.setContentsMargins(12, 14, 12, 12)
 
         st_row = QHBoxLayout()
         self.cam_status = _status_label()
@@ -211,7 +215,7 @@ class HardwareTestTab(QWidget):
 
         param_row = QHBoxLayout()
         param_row.addWidget(QLabel("Exposure:"))
-        self.cam_exp = QDoubleSpinBox()
+        self.cam_exp = NoScrollDoubleSpinBox()
         self.cam_exp.setRange(0.03, 22806.0)
         self.cam_exp.setValue(0.06)
         self.cam_exp.setSuffix(" ms")
@@ -220,7 +224,7 @@ class HardwareTestTab(QWidget):
         param_row.addWidget(self.cam_exp)
         param_row.addSpacing(12)
         param_row.addWidget(QLabel("Gain:"))
-        self.cam_gain = QSpinBox()
+        self.cam_gain = NoScrollSpinBox()
         self.cam_gain.setRange(0, 480)
         self.cam_gain.setValue(0)
         self.cam_gain.setFixedWidth(70)
@@ -239,7 +243,7 @@ class HardwareTestTab(QWidget):
         self._cam_frame_cache = None
         contrast_row = QHBoxLayout()
         contrast_row.addWidget(QLabel("vmin %:"))
-        self.cam_vmin = QSpinBox()
+        self.cam_vmin = NoScrollSpinBox()
         self.cam_vmin.setRange(0, 99)
         self.cam_vmin.setValue(0)
         self.cam_vmin.setSuffix(" %")
@@ -248,7 +252,7 @@ class HardwareTestTab(QWidget):
         contrast_row.addWidget(self.cam_vmin)
         contrast_row.addSpacing(12)
         contrast_row.addWidget(QLabel("vmax %:"))
-        self.cam_vmax = QSpinBox()
+        self.cam_vmax = NoScrollSpinBox()
         self.cam_vmax.setRange(1, 100)
         self.cam_vmax.setValue(100)
         self.cam_vmax.setSuffix(" %")
@@ -274,11 +278,14 @@ class HardwareTestTab(QWidget):
         cam_layout.addWidget(self.btn_cam_test)
         cam_layout.addLayout(contrast_row)
         cam_layout.addWidget(self._cam_canvas)
+        prepare_group_box(grp_cam)
         root.addWidget(grp_cam)
 
         # ── PM100D ──────────────────────────────────────────────────────────
         grp_pm = QGroupBox("Power Meter  (Thorlabs PM100D — USB/VISA)")
         pm_layout = QVBoxLayout(grp_pm)
+        pm_layout.setSpacing(10)
+        pm_layout.setContentsMargins(12, 14, 12, 12)
 
         pm_st_row = QHBoxLayout()
         self.pm_status = _status_label()
@@ -304,10 +311,33 @@ class HardwareTestTab(QWidget):
             "QPushButton:disabled{background:#313244;color:#585b70;}"
         )
         self.btn_pm_read.clicked.connect(self._on_pm_read)
+        self.btn_pm_zero = QPushButton("Zero (Dark Adj)")
+        self.btn_pm_zero.setStyleSheet(
+            "QPushButton{background:#a6e3a1;color:#1e1e2e;font-weight:bold;"
+            "padding:5px 14px;border-radius:5px;}"
+            "QPushButton:hover{background:#94e2d5;}"
+            "QPushButton:disabled{background:#313244;color:#585b70;}"
+        )
+        self.btn_pm_zero.clicked.connect(self._on_pm_zero)
         pm_visa_row.addWidget(self.pm_visa)
         pm_visa_row.addWidget(self.btn_pm_scan)
         pm_visa_row.addWidget(self.btn_pm_read)
+        pm_visa_row.addWidget(self.btn_pm_zero)
         pm_layout.addLayout(pm_visa_row)
+
+        # PM wavelength setting
+        pm_wl_row = QHBoxLayout()
+        pm_wl_row.addWidget(QLabel("Wavelength:"))
+        self.pm_wavelength = NoScrollDoubleSpinBox()
+        self.pm_wavelength.setRange(400, 2000)
+        self.pm_wavelength.setDecimals(1)
+        self.pm_wavelength.setValue(650.0)
+        self.pm_wavelength.setSuffix("  nm")
+        self.pm_wavelength.setFixedWidth(100)
+        self.pm_wavelength.setToolTip("Set PM100D correction wavelength (must match laser)")
+        pm_wl_row.addWidget(self.pm_wavelength)
+        pm_wl_row.addStretch()
+        pm_layout.addLayout(pm_wl_row)
 
         pm_hint = QLabel(
             "Pure Python: pip install pyvisa + NI-VISA. Same resource string is used in Test Data tab."
@@ -315,11 +345,14 @@ class HardwareTestTab(QWidget):
         pm_hint.setWordWrap(True)
         pm_hint.setStyleSheet(muted())
         pm_layout.addWidget(pm_hint)
+        prepare_group_box(grp_pm)
         root.addWidget(grp_pm)
 
         # ── OSA ──────────────────────────────────────────────────────────────
         grp_osa = QGroupBox("OSA  (Yokogawa)")
         osa_layout = QHBoxLayout(grp_osa)
+        osa_layout.setSpacing(10)
+        osa_layout.setContentsMargins(12, 14, 12, 12)
         self.osa_status = _status_label()
         self.osa_status_text = QLabel("Not tested")
         self.osa_status_text.setStyleSheet("color:#6c7086;")
@@ -333,11 +366,9 @@ class HardwareTestTab(QWidget):
         self.btn_osa_ping.clicked.connect(self._on_osa_ping)
         osa_layout.addWidget(self.osa_status)
         osa_layout.addWidget(self.osa_status_text)
-        osa_layout.addStretch()
         osa_layout.addWidget(self.btn_osa_ping)
+        prepare_group_box(grp_osa)
         root.addWidget(grp_osa)
-
-        root.addStretch()
 
         # ── Connect NKTThread signals ────────────────────────────────────────
         if self._nkt_thread:
@@ -637,7 +668,8 @@ class HardwareTestTab(QWidget):
         self.btn_pm_read.setEnabled(False)
         self.btn_pm_scan.setEnabled(False)
         self._set_pm_status("yellow", "Reading PM100D...")
-        self._pm_worker = PMTestWorker(resource)
+        wl = self.pm_wavelength.value()
+        self._pm_worker = PMTestWorker(resource, wavelength_nm=wl)
         self._pm_worker.success_signal.connect(
             lambda m: self._set_pm_status("green", m), Qt.QueuedConnection
         )
@@ -650,6 +682,29 @@ class HardwareTestTab(QWidget):
     def _on_pm_read_done(self):
         self.btn_pm_read.setEnabled(True)
         self.btn_pm_scan.setEnabled(True)
+
+    def _on_pm_zero(self):
+        resource = self.pm_visa.text().strip()
+        if not resource:
+            self._set_pm_status("red", "Scan or enter VISA resource first")
+            return
+        wl = self.pm_wavelength.value()
+        self.btn_pm_zero.setEnabled(False)
+        self.btn_pm_read.setEnabled(False)
+        self._set_pm_status("yellow", f"Zeroing (cover sensor!) @ {wl:.0f} nm...")
+        self._pm_worker = PMZeroWorker(resource, wavelength_nm=wl)
+        self._pm_worker.success_signal.connect(
+            lambda m: self._set_pm_status("green", m), Qt.QueuedConnection
+        )
+        self._pm_worker.error_signal.connect(
+            lambda m: self._set_pm_status("red", m), Qt.QueuedConnection
+        )
+        self._pm_worker.finished.connect(self._on_pm_zero_done, Qt.QueuedConnection)
+        self._pm_worker.start()
+
+    def _on_pm_zero_done(self):
+        self.btn_pm_zero.setEnabled(True)
+        self.btn_pm_read.setEnabled(True)
 
     # ── OSA ping ─────────────────────────────────────────────────────────
     def _on_osa_ping(self):

@@ -13,5 +13,6 @@
       ]
     }
   },
-  "terminal.integrated.defaultProfile.windows": "PowerShell (conda hook + DNN)"
+  "terminal.integrated.defaultProfile.windows": "PowerShell (conda hook + DNN)",
+  "specstory.cloudSync.enabled": "never"
 }

@@ -354,6 +354,41 @@ def nkt_safety_init(
     time.sleep(0.1)
 
 
+def set_channel_amplitude(
+    comport: str,
+    RF_power: int,
+    amplitude: int,
+    channel: int = 0,
+) -> None:
+    """Update RF channel amplitude only (RF stays enabled, no other channels touched)."""
+    from NKTP_DLL import registerWriteU16
+
+    ch = int(channel)
+    if ch < 0 or ch > 7:
+        raise ValueError("channel must be 0..7")
+    registerWriteU16(comport, RF_power, 0xB0 + ch, int(amplitude), -1)
+    time.sleep(0.05)
+
+
+def set_channel_wavelength_amplitude(
+    comport: str,
+    RF_power: int,
+    wavelength_nm: float,
+    amplitude: int,
+    channel: int = 0,
+) -> None:
+    """Set one channel wavelength + amplitude only (RF stays on, no channel zeroing)."""
+    from NKTP_DLL import registerWriteU16, registerWriteU32
+
+    ch = int(channel)
+    if ch < 0 or ch > 7:
+        raise ValueError("channel must be 0..7")
+    registerWriteU32(comport, RF_power, 0x90 + ch, int(wavelength_nm * 1000), -1)
+    time.sleep(0.05)
+    registerWriteU16(comport, RF_power, 0xB0 + ch, int(amplitude), -1)
+    time.sleep(0.05)
+
+
 def set_single_channel(
     comport: str,
     RF_power: int,
@@ -437,3 +472,192 @@ def nkt_full_shutdown(comport: str, extreme: int, RF_power: int) -> None:
     time.sleep(0.1)
     registerRead(comport, RF_power, 0xB0, -1)
     time.sleep(0.1)
+
+
+# ── Shared multi-channel helpers (used by LoopRunner AND TestDataRunner) ──────
+
+def set_multipeaks_config(
+    comport: str,
+    extreme: int,
+    rf: int,
+    emission_pct: int,
+    wavelengths: List[float],
+    amplitudes: List[int],
+) -> None:
+    """Apply a full multi-channel NKT config.
+
+    Zeros all 8 amplitude channels, then writes each (wavelength, amplitude) pair.
+    Call via nkt_thread.call() from any runner thread.
+    """
+    from NKTP_DLL import registerWriteU8, registerWriteU16, registerWriteU32
+
+    registerWriteU8(comport, extreme, 0x30, 0x03, -1)
+    time.sleep(0.05)
+    registerWriteU16(comport, extreme, 0x37, int(emission_pct) * 10, -1)
+    time.sleep(0.05)
+    registerWriteU8(comport, rf, 0x30, 0x01, -1)
+    time.sleep(0.05)
+
+    for i in range(8):
+        registerWriteU16(comport, rf, 0xB0 + i, 0, -1)
+        time.sleep(0.05)
+    for i, (wl, amp) in enumerate(zip(wavelengths, amplitudes)):
+        registerWriteU32(comport, rf, 0x90 + i, int(float(wl) * 1000), -1)
+        time.sleep(0.05)
+        registerWriteU16(comport, rf, 0xB0 + i, int(amp), -1)
+        time.sleep(0.05)
+
+
+def _random_wavelengths_gen(
+    rng,
+    wl_min: float,
+    wl_max: float,
+    n_ch: int,
+    sp_min: float,
+    sp_max: float,
+) -> List[float]:
+    """Pick n_ch sorted wavelengths in [wl_min, wl_max] with random spacing.
+
+    Adjacent channel spacing drawn from Uniform(sp_min, sp_max);
+    the whole group is randomly placed within the range.
+    """
+    import numpy as _np
+
+    if n_ch <= 0:
+        return []
+    if n_ch == 1:
+        return [round(float(rng.uniform(wl_min, wl_max)), 1)]
+
+    max_fit = max(1, int((wl_max - wl_min) / max(sp_min, 1e-6)) + 1)
+    n_ch = min(n_ch, max_fit)
+    if n_ch == 1:
+        return [round(float(rng.uniform(wl_min, wl_max)), 1)]
+
+    gaps = rng.uniform(sp_min, sp_max, size=n_ch - 1)
+    total_span = float(gaps.sum())
+    if total_span > wl_max - wl_min:
+        gaps = gaps * ((wl_max - wl_min) / total_span)
+        total_span = float(gaps.sum())
+
+    slack = wl_max - wl_min - total_span
+    start = wl_min + float(rng.uniform(0, max(slack, 0)))
+    pts = [start]
+    for g in gaps:
+        pts.append(pts[-1] + float(g))
+    return [round(p, 1) for p in pts]
+
+
+def build_nkt_step_configs(cfg: dict) -> List[dict]:
+    """Generate NKT step configs from a loop config dict.
+
+    Returns a list of ``{"wavelengths": [...], "amplitudes": [...]}`` dicts,
+    one per loop step.  Logic mirrors LoopRunner._build_configs exactly so
+    both runners produce identical sequences for the same seed.
+    """
+    import numpy as _np
+
+    mode = int(cfg.get("mode", 0))
+    n_steps = int(cfg.get("n_steps", 10))
+
+    # ── Single Peak Scan ──────────────────────────────────────────────────
+    if mode == 2:
+        wl_min = float(cfg.get("single_wl_min", 620.0))
+        wl_max = float(cfg.get("single_wl_max", 690.0))
+        step = float(cfg.get("single_step", 0.5))
+        amp = int(cfg.get("single_amp", 1000))
+        candidates = _np.round(_np.arange(wl_min, wl_max + step * 0.5, step), 1)
+        return [{"wavelengths": [float(w)], "amplitudes": [amp]} for w in candidates]
+
+    # ── Manual Multi-Peak ─────────────────────────────────────────────────
+    if mode == 1:
+        wls = list(cfg.get("manual_wavelengths", []))
+        amps = list(cfg.get("manual_amplitudes", []))
+        if not wls:
+            return []
+        return [{"wavelengths": wls, "amplitudes": amps}] * n_steps
+
+    # ── Broadband (mode == 3) ─────────────────────────────────────────────
+    if mode == 3:
+        bb_wl_min       = float(cfg.get("bb_wl_min", 620.0))
+        bb_wl_max       = float(cfg.get("bb_wl_max", 670.0))
+        bb_fixed_center = bool(cfg.get("bb_fixed_center", False))
+        bb_center_nm    = float(cfg.get("bb_center_nm", 645.0))
+        bb_auto_spacing = bool(cfg.get("bb_auto_spacing", False))
+        bb_spacing_nm   = float(cfg.get("bb_spacing_nm", 1.0))
+        bb_amp_mode     = cfg.get("bb_amp_mode", "equal")
+        bb_amp_equal    = int(cfg.get("bb_amp_equal", 500))
+        bb_amp_min_v    = int(cfg.get("bb_amp_min", 200))
+        bb_amp_max_v    = int(cfg.get("bb_amp_max", 1000))
+        bb_amp_manual   = [int(a) for a in cfg.get("bb_amp_manual", [500] * 8)]
+        bb_emission     = int(cfg.get("bb_emission_pct", 100))
+        rng = _np.random.default_rng(int(cfg.get("seed", 42)))
+        spacing = 10.0 / 7.0 if bb_auto_spacing else bb_spacing_nm
+        configs = []
+        for _ in range(n_steps):
+            if bb_fixed_center:
+                center = bb_center_nm
+            else:
+                lo, hi = bb_wl_min + 5.0, bb_wl_max - 5.0
+                center = (
+                    float(rng.uniform(lo, hi)) if lo < hi
+                    else (bb_wl_min + bb_wl_max) / 2.0
+                )
+            wls = [
+                round(max(500.0, min(900.0, center + spacing * (i - 3.5))), 1)
+                for i in range(8)
+            ]
+            if bb_amp_mode == "random":
+                amps = rng.integers(bb_amp_min_v, bb_amp_max_v + 1, size=8).tolist()
+            elif bb_amp_mode == "manual":
+                amps = (bb_amp_manual + [500] * 8)[:8]
+            else:
+                amps = [bb_amp_equal] * 8
+            label = (
+                f"Broadband: center={center:.1f}nm  "
+                f"span={spacing * 7:.1f}nm  "
+                f"amps={amps}"
+            )
+            configs.append({
+                "wavelengths": wls,
+                "amplitudes":  amps,
+                "emission":    bb_emission,
+                "label":       label,
+            })
+        return configs
+
+    # ── Random Multi-Peak (mode == 0) ─────────────────────────────────────
+    seed = int(cfg.get("seed", 42))
+    wl_min = float(cfg.get("wl_min", 620))
+    wl_max = float(cfg.get("wl_max", 690))
+    spacing_mode = int(cfg.get("spacing_mode", 0))
+    wl_step = float(cfg.get("wl_step", 5))
+    spacing_min = float(cfg.get("spacing_min", 0.1))
+    spacing_max = float(cfg.get("spacing_max", 1.0))
+    ch_min = int(cfg.get("n_ch_min", 2))
+    ch_max = int(cfg.get("n_ch_max", 8))
+    amp_min = int(cfg.get("amp_min", 200))
+    amp_max = int(cfg.get("amp_max", 1000))
+    rng = _np.random.default_rng(seed)
+
+    if spacing_mode == 0:
+        wl_candidates = _np.round(
+            _np.arange(wl_min, wl_max + wl_step * 0.5, wl_step), 1
+        )
+        if len(wl_candidates) == 0:
+            return []
+        configs = []
+        for _ in range(n_steps):
+            n_ch = int(_np.clip(rng.integers(ch_min, ch_max + 1), 1, len(wl_candidates)))
+            idx = rng.choice(len(wl_candidates), size=n_ch, replace=False)
+            wls = sorted(wl_candidates[idx].tolist())
+            amps = rng.integers(amp_min, amp_max + 1, size=len(wls)).tolist()
+            configs.append({"wavelengths": wls, "amplitudes": amps})
+        return configs
+
+    configs = []
+    for _ in range(n_steps):
+        n_ch = int(rng.integers(ch_min, ch_max + 1))
+        wls = _random_wavelengths_gen(rng, wl_min, wl_max, n_ch, spacing_min, spacing_max)
+        amps = rng.integers(amp_min, amp_max + 1, size=len(wls)).tolist()
+        configs.append({"wavelengths": wls, "amplitudes": amps})
+    return configs

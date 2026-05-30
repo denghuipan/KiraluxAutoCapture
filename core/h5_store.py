@@ -195,9 +195,44 @@ def open_image_h5_writer(cfg: dict, base_out_dir: str) -> Optional[ImageH5Writer
     return ImageH5Writer(path)
 
 
-def open_osa_h5_writer(cfg: dict, base_out_dir: str) -> Optional[OsaH5Writer]:
+def open_osa_h5_writer(cfg: dict, base_out_dir: str) -> Optional["OsaH5Writer"]:
     if not cfg.get("osa_h5_enabled"):
         return None
     name = cfg.get("osa_h5_filename", "osa_spectra.h5") or "osa_spectra.h5"
     path = os.path.join(base_out_dir, name)
+    n_pts = int(cfg.get("osa_reduce_points", 300))
+
+    # If the H5 already exists, check its spectrum shape matches the configured
+    # number of points.  If not, rename the old file so a fresh one is created
+    # at the configured size (user's configured value always takes precedence).
+    #
+    # IMPORTANT: read existing_pts inside the `with` block so the file is
+    # fully closed before we call os.rename().  On Windows, renaming an open
+    # file raises PermissionError, which would previously be silently swallowed
+    # by the outer except, causing a writer to be returned on the wrong file.
+    if h5py is not None and os.path.isfile(path):
+        existing_pts = None
+        try:
+            with h5py.File(path, "r") as f:
+                if "spectrum" in f:
+                    existing_pts = int(f["spectrum"].shape[1])  # shape = (N, P, 1)
+        except Exception:
+            pass  # corrupt or unreadable — fall through and let OsaH5Writer handle it
+
+        if existing_pts is not None and existing_pts != n_pts:
+            try:
+                import datetime
+                ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                base, ext = os.path.splitext(path)
+                renamed = f"{base}_old_{existing_pts}pts_{ts}{ext}"
+                os.rename(path, renamed)
+                # caller (loop_runner) will emit a warning via the
+                # return value being a fresh writer; log can't be
+                # emitted here, so we attach info to the writer object.
+                writer = OsaH5Writer(path)
+                writer._renamed_from = renamed
+                return writer
+            except Exception:
+                pass  # rename failed (e.g. still locked) — fall through
+
     return OsaH5Writer(path)

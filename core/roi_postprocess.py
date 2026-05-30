@@ -27,26 +27,29 @@ def _load_sibling_module(module_name: str, rel_path: str):
         raise ImportError(f"ROI processor module not found: {path}")
     spec = importlib.util.spec_from_file_location(module_name, path)
     mod = importlib.util.module_from_spec(spec)
+    # Register in sys.modules BEFORE executing to support decorators that
+    # inspect sys.modules (like dataclass).
+    sys.modules[module_name] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
-_finder = None
-_image_io = None
+_cached_finder = None
+_cached_image_io = None
 
 
 def _finder():
-    global _finder
-    if _finder is None:
-        _finder = _load_sibling_module("kiralux_roi_finder", "core/roi_finder.py")
-    return _finder
+    global _cached_finder
+    if _cached_finder is None:
+        _cached_finder = _load_sibling_module("kiralux_roi_finder", "core/roi_finder.py")
+    return _cached_finder
 
 
 def _image_io():
-    global _image_io
-    if _image_io is None:
-        _image_io = _load_sibling_module("kiralux_image_io", "core/image_io.py")
-    return _image_io
+    global _cached_image_io
+    if _cached_image_io is None:
+        _cached_image_io = _load_sibling_module("kiralux_image_io", "core/image_io.py")
+    return _cached_image_io
 
 
 class RoiPostprocessError(Exception):

@@ -235,13 +235,14 @@ class OSAScanWorker(QThread):
 
 # ── PM100D power meter ────────────────────────────────────────────────────────
 class PMTestWorker(QThread):
-    """Connect to PM100D via VISA and read one power sample."""
+    """Connect to PM100D via VISA, set wavelength, read one power sample."""
     success_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, visa_resource: str):
+    def __init__(self, visa_resource: str, wavelength_nm: float = 600):
         super().__init__()
         self.visa_resource = visa_resource
+        self.wavelength_nm = float(wavelength_nm)
 
     def run(self):
         from core.pm_meter import PM100DPowerMeter
@@ -250,14 +251,42 @@ class PMTestWorker(QThread):
         pm = PM100DPowerMeter(self.visa_resource)
         try:
             pm.connect()
+            pm.set_wavelength(self.wavelength_nm)
             watts = pm.read_power_watts()
             idn = pm.idn or self.visa_resource
             dbm = watts_to_dbm(watts)
             self.success_signal.emit(
-                f"{idn}  |  {watts:.6e} W  ({dbm:.2f} dBm @ PM head)"
+                f"{idn}  |  {watts:.6e} W  ({dbm:.2f} dBm @ PM head, "
+                f"λ={self.wavelength_nm:.0f} nm)"
             )
         except Exception as exc:
             self.error_signal.emit(str(exc))
         finally:
             pm.close()
 
+
+class PMZeroWorker(QThread):
+    """Perform dark offset (zero) adjustment on PM100D."""
+    success_signal = pyqtSignal(str)
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, visa_resource: str, wavelength_nm: float = 600):
+        super().__init__()
+        self.visa_resource = visa_resource
+        self.wavelength_nm = float(wavelength_nm)
+
+    def run(self):
+        from core.pm_meter import PM100DPowerMeter
+
+        pm = PM100DPowerMeter(self.visa_resource, wavelength_nm=self.wavelength_nm)
+        try:
+            pm.connect()
+            pm.zero_dark(timeout_s=30.0)
+            self.success_signal.emit(
+                f"Zero adjustment complete @ {self.wavelength_nm:.0f} nm. "
+                f"Uncover sensor before measuring."
+            )
+        except Exception as exc:
+            self.error_signal.emit(str(exc))
+        finally:
+            pm.close()

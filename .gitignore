@@ -8,6 +8,24 @@ build_release/
 __pycache__/
 *.py[cod]
 
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+
 # Runtime logs / local artifacts
 osa_log.csv
 *.log
+
+# Cursor / local tooling
+.cursorindexingignore
+.specstory/
+
+# Desktop packaging / personal scripts
+package_desktop.ps1
+*.ipynb
+*.dat
+*.csv
+
+# External SDKs (should be installed separately)
+ThorlabsPM100-*/

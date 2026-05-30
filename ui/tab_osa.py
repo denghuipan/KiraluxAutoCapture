@@ -6,7 +6,7 @@ import numpy as np
 import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QDoubleSpinBox, QSpinBox,
+    QGroupBox, QLabel,
     QLineEdit, QCheckBox, QComboBox, QPushButton,
     QSizePolicy, QFileDialog, QFrame,
 )
@@ -23,6 +23,10 @@ from ui.style_helpers import (
     muted, accent, title, hint, warning, error, success,
     checkbox_emphasis, mpl_font_size,
 )
+from ui.layout_helpers import (
+    install_scroll_content, configure_form_layout, prepare_group_box, GROUP_SPACING,
+    NoScrollSpinBox, NoScrollDoubleSpinBox,
+)
 
 
 class OSATab(QWidget):
@@ -33,12 +37,11 @@ class OSATab(QWidget):
         self._last_x = None
         self._last_y = None
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(8)
+        _, root = install_scroll_content(self)
 
         # ── Top: settings (fixed height, priority for labels/controls) ───────
         ctrl_row = QHBoxLayout()
+        ctrl_row.setSpacing(10)
         self.chk_enable = QCheckBox("Enable OSA in capture loop")
         self.chk_enable.setChecked(False)
         self.chk_enable.setStyleSheet(checkbox_emphasis("#f9e2af"))
@@ -68,63 +71,58 @@ class OSATab(QWidget):
         ctrl_row.addWidget(self.lbl_scan_status)
         root.addLayout(ctrl_row)
 
-        # Settings row — horizontal group boxes (same pattern as Camera tab)
-        settings_row = QHBoxLayout()
-        settings_row.setSpacing(8)
+        # Settings — stacked group boxes
+        settings_col = QVBoxLayout()
+        settings_col.setSpacing(GROUP_SPACING)
 
         # Connection
         self.grp_conn = QGroupBox("Network Connection")
         form_c = QFormLayout(self.grp_conn)
-        form_c.setHorizontalSpacing(10)
-        form_c.setVerticalSpacing(8)
-        form_c.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form_c.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        configure_form_layout(form_c)
 
         self.edit_host = QLineEdit("192.168.0.1")
-        self.spin_port = QSpinBox()
+        self.spin_port = NoScrollSpinBox()
         self.spin_port.setRange(1, 65535)
         self.spin_port.setValue(10001)
 
         form_c.addRow("Host IP:", self.edit_host)
         form_c.addRow("Port:", self.spin_port)
-        settings_row.addWidget(self.grp_conn)
+        prepare_group_box(self.grp_conn)
+        settings_col.addWidget(self.grp_conn)
 
         # Measurement params
         self.grp_meas = QGroupBox("Measurement Parameters")
         form_m = QFormLayout(self.grp_meas)
-        form_m.setHorizontalSpacing(10)
-        form_m.setVerticalSpacing(8)
-        form_m.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form_m.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        configure_form_layout(form_m)
 
-        self.spin_wl_start = QDoubleSpinBox()
+        self.spin_wl_start = NoScrollDoubleSpinBox()
         self.spin_wl_start.setRange(400, 2000)
         self.spin_wl_start.setValue(610.0)
         self.spin_wl_start.setSuffix("  nm")
 
-        self.spin_wl_stop = QDoubleSpinBox()
+        self.spin_wl_stop = NoScrollDoubleSpinBox()
         self.spin_wl_stop.setRange(400, 2000)
         self.spin_wl_stop.setValue(700.0)
         self.spin_wl_stop.setSuffix("  nm")
 
-        self.spin_resolution = QDoubleSpinBox()
+        self.spin_resolution = NoScrollDoubleSpinBox()
         self.spin_resolution.setRange(0.02, 5.0)
         self.spin_resolution.setValue(0.5)
         self.spin_resolution.setSuffix("  nm")
         self.spin_resolution.setDecimals(2)
 
-        self.spin_rlevel = QSpinBox()
+        self.spin_rlevel = NoScrollSpinBox()
         self.spin_rlevel.setRange(1, 100000)
         self.spin_rlevel.setValue(2000)
         self.spin_rlevel.setSuffix("  nW")
 
-        self.spin_sampling = QDoubleSpinBox()
+        self.spin_sampling = NoScrollDoubleSpinBox()
         self.spin_sampling.setRange(0.001, 10.0)
         self.spin_sampling.setValue(0.05)
         self.spin_sampling.setSuffix("  nm")
         self.spin_sampling.setDecimals(3)
 
-        self.spin_avg = QSpinBox()
+        self.spin_avg = NoScrollSpinBox()
         self.spin_avg.setRange(1, 1000)
         self.spin_avg.setValue(1)
 
@@ -143,15 +141,13 @@ class OSATab(QWidget):
         form_m.addRow("Averages:", self.spin_avg)
         form_m.addRow("Sensitivity:", self.combo_sensitivity)
         form_m.addRow("Smoothing:", self.combo_smoothing)
-        settings_row.addWidget(self.grp_meas)
+        prepare_group_box(self.grp_meas)
+        settings_col.addWidget(self.grp_meas)
 
         # ── Save settings ─────────────────────────────────────────────────────
         self.grp_save = QGroupBox("Save Settings")
         form_s = QFormLayout(self.grp_save)
-        form_s.setHorizontalSpacing(10)
-        form_s.setVerticalSpacing(8)
-        form_s.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form_s.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        configure_form_layout(form_s)
 
         # Output directory
         dir_row = QHBoxLayout()
@@ -179,35 +175,33 @@ class OSATab(QWidget):
         chk_row.addWidget(self.chk_save_png)
         chk_row.addStretch()
         form_s.addRow("Save:", chk_row)
-        settings_row.addWidget(self.grp_save)
+        prepare_group_box(self.grp_save)
+        settings_col.addWidget(self.grp_save)
 
         # ── Reduce + H5 (optional, separate from camera H5) ───────────────────
         self.grp_h5 = QGroupBox("Reduce + H5  (optional)")
         form_h5 = QFormLayout(self.grp_h5)
-        form_h5.setHorizontalSpacing(10)
-        form_h5.setVerticalSpacing(8)
-        form_h5.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form_h5.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        configure_form_layout(form_h5)
         self.chk_osa_h5 = QCheckBox("Append reduced spectrum to H5")
         self.chk_osa_h5.setToolTip(
             "Uses the same labels as cropped images: roundXX_loopYY_j"
         )
         self.edit_osa_h5 = QLineEdit("osa_spectra.h5")
-        self.spin_reduce_points = QSpinBox()
+        self.spin_reduce_points = NoScrollSpinBox()
         self.spin_reduce_points.setRange(2, 5000)
         self.spin_reduce_points.setValue(300)
-        self.spin_reduce_wl_min = QDoubleSpinBox()
+        self.spin_reduce_wl_min = NoScrollDoubleSpinBox()
         self.spin_reduce_wl_min.setRange(400, 2000)
         self.spin_reduce_wl_min.setValue(610.0)
         self.spin_reduce_wl_min.setSuffix(" nm")
-        self.spin_reduce_wl_max = QDoubleSpinBox()
+        self.spin_reduce_wl_max = NoScrollDoubleSpinBox()
         self.spin_reduce_wl_max.setRange(400, 2000)
         self.spin_reduce_wl_max.setValue(680.0)
         self.spin_reduce_wl_max.setSuffix(" nm")
-        self.spin_reduce_window = QSpinBox()
+        self.spin_reduce_window = NoScrollSpinBox()
         self.spin_reduce_window.setRange(3, 501)
         self.spin_reduce_window.setValue(31)
-        self.spin_reduce_poly = QSpinBox()
+        self.spin_reduce_poly = NoScrollSpinBox()
         self.spin_reduce_poly.setRange(1, 9)
         self.spin_reduce_poly.setValue(3)
         form_h5.addRow(self.chk_osa_h5)
@@ -217,8 +211,9 @@ class OSATab(QWidget):
         form_h5.addRow("WL range max:", self.spin_reduce_wl_max)
         form_h5.addRow("SavGol window:", self.spin_reduce_window)
         form_h5.addRow("SavGol polyorder:", self.spin_reduce_poly)
-        settings_row.addWidget(self.grp_h5)
-        root.addLayout(settings_row)
+        prepare_group_box(self.grp_h5)
+        settings_col.addWidget(self.grp_h5)
+        root.addLayout(settings_col)
 
         info = QLabel(
             "If OSA is unreachable at loop start, NKT + camera continue without OSA."
@@ -256,7 +251,6 @@ class OSATab(QWidget):
         )
         self.canvas.draw()
         root.addWidget(self.canvas)
-        root.addStretch(1)
 
         # Initial enabled state
         self._on_enable(False)
@@ -294,9 +288,9 @@ class OSATab(QWidget):
 
     # ── Enable/disable settings ───────────────────────────────────────────────
     def _on_enable(self, checked: bool):
-        self.grp_conn.setEnabled(checked)
-        self.grp_meas.setEnabled(checked)
-        self.grp_save.setEnabled(checked)
+        # Connection, measurement, and save settings are shared with Test Data OSA —
+        # keep them always accessible so users can configure host/port even when
+        # not running OSA in the capture loop.
         self.grp_h5.setEnabled(checked)
         # Scan Once is always available regardless of loop-enable toggle
         self.btn_scan.setEnabled(True)
@@ -371,7 +365,7 @@ class OSATab(QWidget):
         return {
             "osa_enabled":     self.chk_enable.isChecked(),
             "osa_only":        self.chk_osa_only.isChecked(),
-            "osa_host":        self.edit_host.text(),
+            "osa_host":        self.edit_host.text().strip(),
             "osa_port":        self.spin_port.value(),
             "osa_wl_start":    self.spin_wl_start.value(),
             "osa_wl_stop":     self.spin_wl_stop.value(),

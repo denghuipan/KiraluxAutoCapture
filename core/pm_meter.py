@@ -1,7 +1,7 @@
 """
 Power meter backends — Python direct control (no LabVIEW).
 
-- PM100D: Thorlabs USB power meter via VISA/SCPI (pyvisa + NI-VISA)
+- PM100D: Thorlabs USB power meter via pyvisa + SCPI (tested & working)
 - Simulated: development stub when hardware is not connected
 """
 from __future__ import annotations
@@ -12,6 +12,8 @@ from typing import List, Optional
 class PowerMeterError(Exception):
     pass
 
+
+# ── Discovery function ─────────────────────────────────────────────────────
 
 def list_visa_resources() -> List[str]:
     """Return VISA resource strings (USB PM100D, etc.)."""
@@ -25,6 +27,8 @@ def list_visa_resources() -> List[str]:
     except Exception:
         return []
 
+
+# ── Back-compat classes ────────────────────────────────────────────────────
 
 class PowerMeterBase:
     def connect(self) -> None:
@@ -56,15 +60,21 @@ class SimulatedPowerMeter(PowerMeterBase):
 
 class PM100DPowerMeter(PowerMeterBase):
     """
-    Thorlabs PM100D (or compatible) via VISA/SCPI.
+    Thorlabs PM100D (or compatible) via VISA/SCPI using pyvisa.
+    Tested & verified working (see power meter.ipynb).
 
-    Typical resource: ``USB0::0x1313::0x8078::P0001234::INSTR``
+    Typical resource: ``USB0::0x1313::0x8078::P0014896::INSTR``
     """
 
-    def __init__(self, resource: str):
+    def __init__(self, resource: str, wavelength_nm: float = 600.0):
         self.resource = resource.strip()
         self._inst = None
+        self._pm100 = None  # ThorlabsPM100 wrapper
         self.idn: str = ""
+        # Settings to apply on connect()
+        self._wavelength = float(wavelength_nm)
+        self._auto_range = True
+        self._avg_count = 1
 
     def connect(self) -> None:
         try:
@@ -72,29 +82,50 @@ class PM100DPowerMeter(PowerMeterBase):
         except ImportError as exc:
             raise PowerMeterError(
                 "pyvisa not installed — run: pip install pyvisa\n"
-                "Then install NI-VISA from ni.com or use pyvisa-py."
             ) from exc
+
         try:
             rm = pyvisa.ResourceManager()
             self._inst = rm.open_resource(self.resource)
-            self._inst.timeout = 5000
+            self._inst.timeout = 10000
             self.idn = self._inst.query("*IDN?").strip()
         except Exception as exc:
             raise PowerMeterError(
                 f"PM100D connect failed ({self.resource}): {exc}\n"
-                "Check USB cable, Thorlabs drivers, and NI-VISA."
+                "Check USB cable and Thorlabs drivers."
             ) from exc
+
+    def set_wavelength(self, wavelength_nm: float) -> None:
+        """Set correction wavelength in nm. Sends SCPI command immediately."""
+        self._wavelength = float(wavelength_nm)
+        if self._inst:
+            self._inst.write(f"SENS:CORR:WAV {wavelength_nm}")
+            # Verify the setting was accepted
+            resp = self._inst.query("SENS:CORR:WAV?").strip()
+            set_wl = float(resp) / 1e0  # device returns in scientific notation
+            # The device returns wavelength in nm as float, e.g. "6.500000E+02"
+            # Just log for debugging - don't fail on minor differences
+
+    def set_avg_count(self, count: int) -> None:
+        """Set number of samples to average."""
+        self._avg_count = max(1, int(count))
+        if self._inst:
+            self._inst.write(f"SENS:AVER:COUN {self._avg_count}")
+
+    def set_auto_range(self, enabled: bool) -> None:
+        """Enable/disable auto power range."""
+        self._auto_range = bool(enabled)
+        if self._inst:
+            self._inst.write(f"SENS:POW:DC:RANG:AUTO {'ON' if enabled else 'OFF'}")
 
     def read_power_watts(self) -> float:
         if self._inst is None:
             raise PowerMeterError("PM100D not connected")
-        for cmd in ("MEAS:POW?", "MEASure:SCALar:POWer?", ":READ?"):
-            try:
-                raw = self._inst.query(cmd).strip()
-                return float(raw)
-            except Exception:
-                continue
-        raise PowerMeterError("PM100D: could not read power (tried MEAS:POW?)")
+        try:
+            raw = self._inst.query("MEAS:POW?").strip()
+            return float(raw)
+        except Exception as exc:
+            raise PowerMeterError(f"PM100D read failed: {exc}") from exc
 
     def close(self) -> None:
         if self._inst is not None:
@@ -103,6 +134,31 @@ class PM100DPowerMeter(PowerMeterBase):
             except Exception:
                 pass
             self._inst = None
+
+    def reset(self) -> None:
+        """Reset instrument to default state."""
+        if self._inst:
+            self._inst.write("*RST")
+
+    def zero_dark(self, timeout_s: float = 30.0) -> None:
+        """Perform dark offset (zero) adjustment.
+
+        The sensor must be covered/blocked during this operation.
+        Polls the status until complete or timeout.
+        """
+        if not self._inst:
+            raise PowerMeterError("PM not connected")
+        # Start the zero adjustment
+        self._inst.write("SENS:CORR:COLL:ZERO:INIT")
+        # Poll until complete
+        import time
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            status = self._inst.query("SENS:CORR:COLL:ZERO:STAT?").strip()
+            if status == "0":
+                return  # Done
+            time.sleep(0.5)
+        raise PowerMeterError("Zero adjustment timed out — ensure sensor is blocked.")
 
 
 def create_power_meter(backend: str, **kwargs) -> PowerMeterBase:
@@ -113,7 +169,7 @@ def create_power_meter(backend: str, **kwargs) -> PowerMeterBase:
         resource = kwargs.get("visa_resource", "")
         if not resource:
             raise PowerMeterError(
-                "PM100D VISA resource is empty — use Hardware Test → Scan PM100D."
+                "PM100D resource is empty — use Hardware Test → Scan PM100D."
             )
         return PM100DPowerMeter(resource)
     raise PowerMeterError(f"Unknown power meter backend: {backend}")

@@ -21,6 +21,7 @@ from core.loop_runner import LoopRunner
 from core.test_data_runner import TestDataRunner
 from core.app_settings import get_settings, APP_NAME, APP_VERSION
 from ui.style_helpers import muted
+from ui.layout_helpers import MAIN_MIN_WIDTH, MAIN_MIN_HEIGHT
 
 
 class MainWindow(QMainWindow):
@@ -28,13 +29,14 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.nkt_thread = nkt_thread
         self.setWindowTitle(f"{APP_NAME}  {APP_VERSION}")
-        self.resize(1000, 780)
+        self.setMinimumSize(MAIN_MIN_WIDTH, MAIN_MIN_HEIGHT)
+        self.resize(MAIN_MIN_WIDTH, 820)
 
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
 
         # Header row
         hdr_row = QHBoxLayout()
@@ -71,7 +73,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.nkt_tab,  "NKT Laser")
         self.tabs.addTab(self.loop_tab, "Auto Capture Loop")
         self.tabs.addTab(self.test_tab, "Test Data")
-        self.tabs.addTab(self.osa_tab,  "OSA (optional)")
+        self.tabs.addTab(self.osa_tab,  "OSA")
         splitter.addWidget(self.tabs)
 
         # Log panel
@@ -186,19 +188,11 @@ class MainWindow(QMainWindow):
                 f"Image H5 enabled → {cfg.get('auto_roi_h5_filename', 'images.h5')}"
             )
             if cfg.get("auto_roi_h5_contrast_enabled"):
-                mode = cfg.get("auto_roi_h5_contrast_mode", "percent_max")
-                if mode == "percentile":
-                    self._log(
-                        f"  H5 contrast: percentile "
-                        f"{cfg.get('auto_roi_h5_p_low', 1)}–"
-                        f"{cfg.get('auto_roi_h5_p_high', 99)}%"
-                    )
-                else:
-                    self._log(
-                        f"  H5 contrast: vmin "
-                        f"{cfg.get('auto_roi_h5_vmin_pct', 0)}%  vmax "
-                        f"{cfg.get('auto_roi_h5_vmax_pct', 100)}%"
-                    )
+                self._log(
+                    f"  H5 contrast: vmin "
+                    f"{cfg.get('auto_roi_h5_vmin_pct', 0)}%  vmax "
+                    f"{cfg.get('auto_roi_h5_vmax_pct', 100)}%  (% of frame max)"
+                )
         if cfg.get("osa_h5_enabled"):
             self._log(
                 f"OSA H5 enabled → {cfg.get('osa_h5_filename', 'osa_spectra.h5')} "
@@ -220,6 +214,7 @@ class MainWindow(QMainWindow):
         self.runner.start()
 
     def _on_stop(self):
+        self.test_tab.stop_live_monitor()
         if self.runner:
             self.runner.request_stop()
         if self.test_runner:
@@ -254,6 +249,7 @@ class MainWindow(QMainWindow):
                 )
                 return
 
+        self.test_tab.stop_live_monitor()
         self._log(
             f"Starting test data collection — λ=[{cfg['test_wavelengths_nm']}]  "
             f"targets dBm=[{cfg['test_target_dbm_list']}]"
@@ -262,6 +258,10 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(True)
         self.test_tab.set_running(True)
         self.test_tab.set_status("Running...")
+        self.test_tab.reset_pm_monitor()
+        self.test_tab.set_pm_tolerance(cfg.get("test_power_tol_db", 0.5))
+        self.test_tab.lbl_in_tolerance.setText("Status: Running…")
+        self.test_tab.lbl_in_tolerance.setStyleSheet("color: #89b4fa;")
         self.progress.setValue(0)
         self.status_label.setText("Test data...")
 
@@ -272,6 +272,13 @@ class MainWindow(QMainWindow):
         self.test_runner.progress_signal.connect(self._on_progress, Qt.QueuedConnection)
         self.test_runner.finished_signal.connect(self._on_test_finished, Qt.QueuedConnection)
         self.test_runner.camera_frame_signal.connect(self._on_camera_frame, Qt.QueuedConnection)
+        self.test_runner.osa_spectrum_signal.connect(self._on_osa_spectrum, Qt.QueuedConnection)
+        self.test_runner.pm_reading_signal.connect(
+            self.test_tab.on_pm_reading, Qt.QueuedConnection
+        )
+        self.test_runner.pm_trace_reset_signal.connect(
+            self.test_tab.begin_pm_trace, Qt.QueuedConnection
+        )
         self.test_runner.start()
 
     def _on_test_finished(self, success: bool):
@@ -281,10 +288,14 @@ class MainWindow(QMainWindow):
         if success:
             self._log("Test data collection complete", "info")
             self.test_tab.set_status("Done")
+            self.test_tab.lbl_in_tolerance.setText("Status: Done")
+            self.test_tab.lbl_in_tolerance.setStyleSheet("color: #a6e3a1;")
             self.status_label.setText("Done")
         else:
             self._log("Test data collection stopped / error.", "warn")
             self.test_tab.set_status("Stopped / error")
+            self.test_tab.lbl_in_tolerance.setText("Status: Stopped / error")
+            self.test_tab.lbl_in_tolerance.setStyleSheet("color: #f38ba8;")
             self.status_label.setText("Stopped")
         self.progress.setValue(0)
         self.test_runner = None

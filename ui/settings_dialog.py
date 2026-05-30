@@ -4,7 +4,7 @@ Changes apply immediately (live preview) and are saved on OK.
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QComboBox, QSpinBox,
+    QGroupBox, QLabel, QComboBox,
     QDialogButtonBox, QPushButton, QFontComboBox,
     QApplication
 )
@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from core.app_settings import get_settings, APP_NAME, APP_VERSION
+from ui.layout_helpers import NoScrollSpinBox
 
 
 class SettingsDialog(QDialog):
@@ -56,7 +57,7 @@ class SettingsDialog(QDialog):
         self.font_combo.setCurrentFont(QFont(self._settings.font_family()))
         self.font_combo.currentFontChanged.connect(self._on_font_changed)
 
-        self.spin_size = QSpinBox()
+        self.spin_size = NoScrollSpinBox()
         self.spin_size.setRange(8, 24)
         self.spin_size.setValue(self._settings.font_size())
         self.spin_size.setSuffix("  pt")

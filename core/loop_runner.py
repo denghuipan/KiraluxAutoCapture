@@ -105,6 +105,12 @@ class LoopRunner(QThread):
                 f"(labels: roundXX_loopYY_j)"
             )
         if self._osa_h5_writer:
+            renamed = getattr(self._osa_h5_writer, "_renamed_from", None)
+            if renamed:
+                self.warn_signal.emit(
+                    f"OSA H5: existing file had wrong spectrum size — "
+                    f"renamed to {os.path.basename(renamed)}; starting fresh."
+                )
             self.log_signal.emit(
                 f"OSA H5 ON → {self._osa_h5_writer.path}  "
                 f"(reduce to {cfg.get('osa_reduce_points', 300)} pts)"
@@ -130,11 +136,14 @@ class LoopRunner(QThread):
                 self.finished_signal.emit(False)
                 return
             pass_cfgs = []
+            base_osa_dir = cfg.get("osa_save_dir", cfg.get("out_dir", "."))
             for ri, rc in enumerate(rounds, 1):
                 merged = dict(cfg)
                 merged.update(rc)
-                merged["out_dir"] = os.path.join(out_dir, f"round_{ri}")
+                round_dir = os.path.join(out_dir, f"round_{ri}")
+                merged["out_dir"] = round_dir
                 merged["file_prefix"] = f"{prefix}_r{ri}"
+                merged["osa_save_dir"] = os.path.join(base_osa_dir, f"round_{ri}")
                 merged["training_round_index"] = ri
                 pass_cfgs.append(merged)
             total_captures = sum(
@@ -239,7 +248,7 @@ class LoopRunner(QThread):
                 break
             round_idx = pass_cfg.get("training_round_index")
             if round_idx is not None:
-                mode_names = {0: "Random Multi", 1: "Manual", 2: "Single Peak"}
+                mode_names = {0: "Random Multi", 1: "Manual", 2: "Single Peak", 3: "Broadband"}
                 mname = mode_names.get(pass_cfg.get("mode", 0), "?")
                 self.log_signal.emit(
                     f"═══ Training Round {round_idx}/{len(pass_cfgs)}  "
@@ -353,15 +362,22 @@ class LoopRunner(QThread):
             amps = step_cfg["amplitudes"]
             loop_i = i + start_idx
 
-            self.log_signal.emit(
-                f"Step {loop_i}  ({i+1}/{n_steps})  |  "
-                f"{len(wls)}ch: {[f'{w}nm' for w in wls]}"
-            )
+            _step_label = step_cfg.get("label")
+            if _step_label:
+                self.log_signal.emit(
+                    f"Step {loop_i}  ({i+1}/{n_steps})  |  {_step_label}"
+                )
+            else:
+                self.log_signal.emit(
+                    f"Step {loop_i}  ({i+1}/{n_steps})  |  "
+                    f"{len(wls)}ch: {[f'{w}nm' for w in wls]}"
+                )
 
+            _step_emission = step_cfg.get("emission", emission)
             if extreme is not None:
                 try:
                     self._nkt_set_multipeaks(
-                        comport, extreme, RF_power, emission,
+                        comport, extreme, RF_power, _step_emission,
                         wls, amps,
                     )
                     time.sleep(settle_s)
@@ -389,6 +405,7 @@ class LoopRunner(QThread):
                                 buf, img_name, out_dir, cfg,
                                 loop_i=loop_i, loop_j=j,
                             )
+                            time.sleep(cfg.get("camera_sleep_s", 0.1))
                         else:
                             self.error_signal.emit(
                                 f"  Camera timeout at i={loop_i} j={j} — stopping."
@@ -463,12 +480,24 @@ class LoopRunner(QThread):
                     f"_amp{amp}"
                     f".csv"
                 )
+            elif mode == 3:
+                bb_wl_min = cfg.get("bb_wl_min", 620)
+                bb_wl_max = cfg.get("bb_wl_max", 670)
+                center_tag = "fixedcenter" if cfg.get("bb_fixed_center") else "randcenter"
+                sp_tag = "autosp" if cfg.get("bb_auto_spacing") else f"sp{cfg.get('bb_spacing_nm', 1.0):.1f}nm"
+                fname = (
+                    f"nkt_config_broadband"
+                    f"_{bb_wl_min:.0f}-{bb_wl_max:.0f}nm"
+                    f"_{center_tag}"
+                    f"_{sp_tag}"
+                    f".csv"
+                )
             else:
                 fname = "nkt_config_manual.csv"
 
             path = os.path.join(out_dir, fname)
             with open(path, "w", newline="") as f:
-                mode_str = {0: "random", 1: "manual", 2: "single"}.get(mode, "unknown")
+                mode_str = {0: "random", 1: "manual", 2: "single", 3: "broadband"}.get(mode, "unknown")
                 f.write(f"# mode={mode_str}\n")
                 for key in ["seed", "n_steps", "n_repeats",
                             "wl_min", "wl_max", "spacing_mode",
@@ -498,94 +527,9 @@ class LoopRunner(QThread):
 
     # ── Config generation ─────────────────────────────────────────────────
     def _build_configs(self, cfg, mode, n_steps):
-        if mode == 2:
-            """Single Peak Scan: generate one wavelength per step."""
-            wl_min = cfg.get("single_wl_min", 620.0)
-            wl_max = cfg.get("single_wl_max", 690.0)
-            step   = cfg.get("single_step", 0.5)
-            amp    = cfg.get("single_amp", 1000)
-            candidates = np.arange(wl_min, wl_max + step * 0.5, step)
-            candidates = np.round(candidates, 1)
-            return [{"wavelengths": [float(w)], "amplitudes": [amp]}
-                    for w in candidates]
-
-        if mode == 1:
-            wls  = cfg.get("manual_wavelengths", [])
-            amps = cfg.get("manual_amplitudes", [])
-            if not wls:
-                return []
-            return [{"wavelengths": wls, "amplitudes": amps}] * n_steps
-
-        seed         = cfg.get("seed", 42)
-        wl_min       = cfg.get("wl_min", 620)
-        wl_max       = cfg.get("wl_max", 690)
-        spacing_mode = cfg.get("spacing_mode", 0)
-        wl_step      = cfg.get("wl_step", 5)
-        spacing_min  = cfg.get("spacing_min", 0.1)
-        spacing_max  = cfg.get("spacing_max", 1.0)
-        ch_min       = cfg.get("n_ch_min", 2)
-        ch_max       = cfg.get("n_ch_max", 8)
-        amp_min      = cfg.get("amp_min", 200)
-        amp_max      = cfg.get("amp_max", 1000)
-        rng = np.random.default_rng(seed)
-
-        if spacing_mode == 0:
-            wl_candidates = np.arange(wl_min, wl_max + wl_step * 0.5, wl_step)
-            wl_candidates = np.round(wl_candidates, 1)
-            if len(wl_candidates) == 0:
-                return []
-            configs = []
-            for _ in range(n_steps):
-                n_ch = int(np.clip(
-                    rng.integers(ch_min, ch_max + 1), 1, len(wl_candidates)))
-                idx  = rng.choice(len(wl_candidates), size=n_ch, replace=False)
-                wls  = sorted(wl_candidates[idx].tolist())
-                amps = rng.integers(amp_min, amp_max + 1, size=len(wls)).tolist()
-                configs.append({"wavelengths": wls, "amplitudes": amps})
-            return configs
-
-        configs = []
-        for _ in range(n_steps):
-            n_ch = int(rng.integers(ch_min, ch_max + 1))
-            wls = self._random_wavelengths(
-                rng, wl_min, wl_max, n_ch, spacing_min, spacing_max)
-            amps = rng.integers(amp_min, amp_max + 1, size=len(wls)).tolist()
-            configs.append({"wavelengths": wls, "amplitudes": amps})
-        return configs
-
-    @staticmethod
-    def _random_wavelengths(rng, wl_min, wl_max, n_ch, sp_min, sp_max):
-        """Pick n_ch sorted wavelengths in [wl_min, wl_max].
-
-        Adjacent spacing is drawn from Uniform(sp_min, sp_max).
-        The entire group is randomly placed within the range.
-        """
-        if n_ch <= 0:
-            return []
-        if n_ch == 1:
-            return [round(float(rng.uniform(wl_min, wl_max)), 1)]
-
-        max_fit = max(1, int((wl_max - wl_min) / sp_min) + 1)
-        n_ch = min(n_ch, max_fit)
-        if n_ch == 1:
-            return [round(float(rng.uniform(wl_min, wl_max)), 1)]
-
-        gaps = rng.uniform(sp_min, sp_max, size=n_ch - 1)
-        total_span = float(gaps.sum())
-
-        if total_span > wl_max - wl_min:
-            scale = (wl_max - wl_min) / total_span
-            gaps = gaps * scale
-            total_span = float(gaps.sum())
-
-        slack = wl_max - wl_min - total_span
-        start = wl_min + float(rng.uniform(0, max(slack, 0)))
-
-        pts = [start]
-        for g in gaps:
-            pts.append(pts[-1] + float(g))
-
-        return [round(p, 1) for p in pts]
+        """Delegate to the shared helper in nkt_support for consistent output."""
+        from core.nkt_support import build_nkt_step_configs
+        return build_nkt_step_configs(cfg)
 
     # ── NKT helpers (all dispatched via nkt_thread.call) ──────────────────
 
@@ -619,27 +563,11 @@ class LoopRunner(QThread):
 
     def _nkt_set_multipeaks(self, comport, extreme, RF_power,
                             emission_pct, wavelengths, amplitudes):
-        from NKTP_DLL import registerWriteU8, registerWriteU16, registerWriteU32
-
-        def _do_set():
-            registerWriteU8(comport, extreme, 0x30, 0x03, -1)
-            time.sleep(0.05)
-            emission = emission_pct * 10
-            registerWriteU16(comport, extreme, 0x37, emission, -1)
-            time.sleep(0.05)
-            registerWriteU8(comport, RF_power, 0x30, 0x01, -1)
-            time.sleep(0.05)
-
-            for i in range(8):
-                registerWriteU16(comport, RF_power, 0xB0 + i, 0, -1)
-                time.sleep(0.05)
-            for i, (wl, amp) in enumerate(zip(wavelengths, amplitudes)):
-                registerWriteU32(comport, RF_power, 0x90 + i, int(wl * 1000), -1)
-                time.sleep(0.05)
-                registerWriteU16(comport, RF_power, 0xB0 + i, int(amp), -1)
-                time.sleep(0.05)
-
-        self.nkt_thread.call(_do_set)
+        from core.nkt_support import set_multipeaks_config
+        self.nkt_thread.call(
+            set_multipeaks_config, comport, extreme, RF_power,
+            emission_pct, wavelengths, amplitudes,
+        )
 
     def _nkt_shutdown(self, comport, extreme, RF_power):
         from core.nkt_support import nkt_full_shutdown
@@ -648,8 +576,11 @@ class LoopRunner(QThread):
 
     # ── OSA helpers ───────────────────────────────────────────────────────
     def _osa_connect(self, cfg):
-        host = cfg.get("osa_host", "")
-        port = cfg.get("osa_port", 10001)
+        host = cfg.get("osa_host", "").strip()
+        port = int(cfg.get("osa_port", 10001))
+        if not host:
+            self.warn_signal.emit("OSA: host IP is empty — check OSA tab.")
+            return None
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(5)
@@ -664,6 +595,10 @@ class LoopRunner(QThread):
             return None
 
     def _osa_measure(self, sock, cfg, loop_i, loop_j, wls, amps, out_dir):
+        self.log_signal.emit(
+            f"  OSA measure started (i={loop_i}, j={loop_j})"
+        )
+
         def _send(msg):
             sock.send((msg + "\r\n").encode())
             time.sleep(0.05)
@@ -688,7 +623,7 @@ class LoopRunner(QThread):
             sock.settimeout(None)
             return buf.decode("utf-8", errors="ignore").strip()
 
-        def _wait_sweep(timeout_s=60):
+        def _wait_sweep(timeout_s=180):
             deadline = time.time() + timeout_s
             while time.time() < deadline:
                 sock.send(b":stat:oper:even?\r\n")
@@ -733,17 +668,19 @@ class LoopRunner(QThread):
             _send(":init:smode 1")
             _send("*CLS")
             _send(":init")
-
+            self.log_signal.emit(f"  OSA sweep started...")
             if not _wait_sweep(60):
                 self.warn_signal.emit(
                     f"OSA sweep timed out at i={loop_i} j={loop_j}")
                 return None
+            self.log_signal.emit(f"  OSA sweep complete, fetching trace data...")
 
             raw_x = _query(":TRAC:DATA:X? TRA", timeout=15)
             raw_y = _query(":TRAC:DATA:Y? TRA", timeout=15)
 
             x_m  = _parse_trace(raw_x)
             y_w  = _parse_trace(raw_y)
+            self.log_signal.emit(f"  OSA trace parsed: X={len(x_m)}, Y={len(y_w)} points")
 
             n = min(len(x_m), len(y_w))
             x_m = x_m[:n]
@@ -787,7 +724,10 @@ class LoopRunner(QThread):
                 "peakY_nW": round(float(y_nw[peak_idx]), 4),
             }
         except Exception as e:
-            self.warn_signal.emit(f"OSA measure error at i={loop_i} j={loop_j}: {e}")
+            import traceback
+            self.warn_signal.emit(
+                f"OSA measure error at i={loop_i} j={loop_j}: {e}\n{traceback.format_exc()}"
+            )
             return None
 
     def _maybe_auto_roi_crop(self, buf, img_name, out_dir, cfg, *, loop_i, loop_j):

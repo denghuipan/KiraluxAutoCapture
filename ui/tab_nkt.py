@@ -5,13 +5,14 @@ import serial.tools.list_ports
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QSpinBox,
+    QGroupBox, QLabel,
     QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QCheckBox
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
 from ui.style_helpers import muted, warning, error, success
+from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox
 
 
 class NKTTab(QWidget):
@@ -22,13 +23,13 @@ class NKTTab(QWidget):
         self._nkt_extreme = -1
         self._nkt_rf = -1
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
+        _, root = install_scroll_content(self)
 
         # Connection
         grp_conn = QGroupBox("Connection")
         conn_layout = QHBoxLayout(grp_conn)
+        conn_layout.setSpacing(10)
+        conn_layout.setContentsMargins(12, 14, 12, 12)
 
         conn_layout.addWidget(QLabel("COM Port:"))
         self.combo_port = QComboBox()
@@ -48,18 +49,20 @@ class NKTTab(QWidget):
         self.combo_crystal.setMinimumWidth(200)
         conn_layout.addWidget(self.combo_crystal)
         conn_layout.addStretch()
+        prepare_group_box(grp_conn)
         root.addWidget(grp_conn)
 
         # Laser power
         grp_pwr = QGroupBox("Laser Power")
         form_pwr = QFormLayout(grp_pwr)
-        form_pwr.setHorizontalSpacing(16)
+        configure_form_layout(form_pwr)
 
-        self.spin_emission = QSpinBox()
+        self.spin_emission = NoScrollSpinBox()
         self.spin_emission.setRange(1, 100)
         self.spin_emission.setValue(100)
         self.spin_emission.setSuffix("  %")
         form_pwr.addRow("Emission level:", self.spin_emission)
+        prepare_group_box(grp_pwr)
         root.addWidget(grp_pwr)
 
         # Manual multi-peak table
@@ -121,8 +124,8 @@ class NKTTab(QWidget):
         self.test_status.setWordWrap(True)
         mp_layout.addWidget(self.test_status)
 
+        prepare_group_box(grp_mp)
         root.addWidget(grp_mp)
-        root.addStretch()
 
         if self._nkt_thread:
             self._nkt_thread.scan_done.connect(self._on_scan_done, Qt.QueuedConnection)
