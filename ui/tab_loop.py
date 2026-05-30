@@ -7,12 +7,12 @@ import copy
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel,
-    QComboBox, QSizePolicy, QCheckBox, QPushButton
+    QSizePolicy, QCheckBox, QPushButton
 )
 from PyQt5.QtCore import Qt
 
 from ui.style_helpers import checkbox_emphasis, muted, accent, success, error
-from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox
+from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
 MODE_LABELS = ("Random Multi-Peak", "Manual Multi-Peak", "Single Peak Scan", "Broadband")
 
@@ -51,7 +51,7 @@ class LoopTab(QWidget):
         self.btn_prev_round = QPushButton("◀ Prev")
         self.btn_prev_round.setFixedWidth(72)
         self.btn_prev_round.clicked.connect(self._on_prev_round)
-        self.combo_current_round = QComboBox()
+        self.combo_current_round = NoScrollComboBox()
         self.combo_current_round.setMinimumWidth(100)
         self.combo_current_round.currentIndexChanged.connect(self._on_current_round_changed)
         self.btn_next_round = QPushButton("Next ▶")
@@ -96,12 +96,12 @@ class LoopTab(QWidget):
         mode_layout.setSpacing(10)
         mode_layout.setContentsMargins(12, 14, 12, 12)
         mode_layout.addWidget(QLabel("Mode:"))
-        self.combo_mode = QComboBox()
+        self.combo_mode = NoScrollComboBox()
         self.combo_mode.addItems([
             "Random Multi-Peak  (reproducible seed)",
             "Manual Multi-Peak  (from NKT tab)",
             "Single Peak Scan  (1ch wavelength sweep)",
-            "Broadband  (8ch, 10 nm span)",
+            "Broadband (8ch)",
         ])
         self.combo_mode.setMinimumWidth(300)
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
@@ -142,7 +142,7 @@ class LoopTab(QWidget):
         wl_range_row.addStretch()
 
         # Spacing mode
-        self.combo_spacing = QComboBox()
+        self.combo_spacing = NoScrollComboBox()
         self.combo_spacing.addItems([
             "Fixed grid",
             "Fully random",
@@ -271,7 +271,7 @@ class LoopTab(QWidget):
         root.addWidget(self.grp_single)
 
         # ── Broadband config ──────────────────────────────────────────────
-        self.grp_broadband = QGroupBox("Broadband Config  (8 ch, 10 nm span)")
+        self.grp_broadband = QGroupBox("Broadband Config  (8 ch)")
         form_bb = QFormLayout(self.grp_broadband)
         configure_form_layout(form_bb)
 
@@ -279,70 +279,135 @@ class LoopTab(QWidget):
         self.spin_bb_steps.setRange(1, 10000)
         self.spin_bb_steps.setValue(50)
 
-        self.spin_bb_wl_min = NoScrollDoubleSpinBox()
-        self.spin_bb_wl_min.setRange(500, 900)
-        self.spin_bb_wl_min.setValue(620.0)
-        self.spin_bb_wl_min.setSuffix("  nm")
-        self.spin_bb_wl_min.setDecimals(1)
+        # ── Span ──────────────────────────────────────────────────────────
+        self.combo_bb_span_mode = NoScrollComboBox()
+        self.combo_bb_span_mode.addItems(["Fixed", "Random range"])
+        self.combo_bb_span_mode.setFixedWidth(120)
+        self.combo_bb_span_mode.currentIndexChanged.connect(self._on_bb_span_mode_changed)
 
-        self.spin_bb_wl_max = NoScrollDoubleSpinBox()
-        self.spin_bb_wl_max.setRange(500, 900)
-        self.spin_bb_wl_max.setValue(670.0)
-        self.spin_bb_wl_max.setSuffix("  nm")
-        self.spin_bb_wl_max.setDecimals(1)
+        self.spin_bb_span_fixed = NoScrollDoubleSpinBox()
+        self.spin_bb_span_fixed.setRange(0.1, 400.0)
+        self.spin_bb_span_fixed.setValue(10.0)
+        self.spin_bb_span_fixed.setSuffix("  nm")
+        self.spin_bb_span_fixed.setDecimals(2)
 
-        _bb_wl_ctr = QWidget()
-        _bb_wl_lay = QHBoxLayout(_bb_wl_ctr)
-        _bb_wl_lay.setContentsMargins(0, 0, 0, 0)
-        _bb_wl_lay.addWidget(self.spin_bb_wl_min)
-        _bb_wl_lay.addWidget(QLabel(" to "))
-        _bb_wl_lay.addWidget(self.spin_bb_wl_max)
-        _bb_wl_lay.addStretch()
+        self.spin_bb_span_min = NoScrollDoubleSpinBox()
+        self.spin_bb_span_min.setRange(0.1, 400.0)
+        self.spin_bb_span_min.setValue(5.0)
+        self.spin_bb_span_min.setSuffix("  nm")
+        self.spin_bb_span_min.setDecimals(2)
 
-        self.chk_bb_fixed_center = QCheckBox("Use fixed center:")
-        self.chk_bb_fixed_center.setChecked(False)
-        self.chk_bb_fixed_center.toggled.connect(self._on_bb_fixed_center_toggled)
+        self._lbl_bb_span_to = QLabel(" – ")
 
-        self.spin_bb_center_nm = NoScrollDoubleSpinBox()
-        self.spin_bb_center_nm.setRange(500, 900)
-        self.spin_bb_center_nm.setValue(645.0)
-        self.spin_bb_center_nm.setSuffix("  nm")
-        self.spin_bb_center_nm.setDecimals(1)
+        self.spin_bb_span_max = NoScrollDoubleSpinBox()
+        self.spin_bb_span_max.setRange(0.1, 400.0)
+        self.spin_bb_span_max.setValue(20.0)
+        self.spin_bb_span_max.setSuffix("  nm")
+        self.spin_bb_span_max.setDecimals(2)
 
-        _bb_center_ctr = QWidget()
-        _bb_center_lay = QHBoxLayout(_bb_center_ctr)
+        _bb_span_w = QWidget()
+        _bb_span_lay = QHBoxLayout(_bb_span_w)
+        _bb_span_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_span_lay.addWidget(self.combo_bb_span_mode)
+        _bb_span_lay.addSpacing(8)
+        _bb_span_lay.addWidget(self.spin_bb_span_fixed)
+        _bb_span_lay.addWidget(self.spin_bb_span_min)
+        _bb_span_lay.addWidget(self._lbl_bb_span_to)
+        _bb_span_lay.addWidget(self.spin_bb_span_max)
+        _bb_span_lay.addStretch()
+
+        # ── Center ────────────────────────────────────────────────────────
+        self.combo_bb_center_mode = NoScrollComboBox()
+        self.combo_bb_center_mode.addItems(["Fixed", "Random range"])
+        self.combo_bb_center_mode.setFixedWidth(120)
+        self.combo_bb_center_mode.currentIndexChanged.connect(self._on_bb_center_mode_changed)
+
+        self.spin_bb_center_fixed = NoScrollDoubleSpinBox()
+        self.spin_bb_center_fixed.setRange(500, 900)
+        self.spin_bb_center_fixed.setValue(645.0)
+        self.spin_bb_center_fixed.setSuffix("  nm")
+        self.spin_bb_center_fixed.setDecimals(1)
+
+        self.spin_bb_center_min = NoScrollDoubleSpinBox()
+        self.spin_bb_center_min.setRange(500, 900)
+        self.spin_bb_center_min.setValue(620.0)
+        self.spin_bb_center_min.setSuffix("  nm")
+        self.spin_bb_center_min.setDecimals(1)
+
+        self._lbl_bb_center_to = QLabel(" – ")
+
+        self.spin_bb_center_max = NoScrollDoubleSpinBox()
+        self.spin_bb_center_max.setRange(500, 900)
+        self.spin_bb_center_max.setValue(670.0)
+        self.spin_bb_center_max.setSuffix("  nm")
+        self.spin_bb_center_max.setDecimals(1)
+
+        _bb_center_w = QWidget()
+        _bb_center_lay = QHBoxLayout(_bb_center_w)
         _bb_center_lay.setContentsMargins(0, 0, 0, 0)
-        _bb_center_lay.addWidget(self.chk_bb_fixed_center)
-        _bb_center_lay.addWidget(self.spin_bb_center_nm)
+        _bb_center_lay.addWidget(self.combo_bb_center_mode)
+        _bb_center_lay.addSpacing(8)
+        _bb_center_lay.addWidget(self.spin_bb_center_fixed)
+        _bb_center_lay.addWidget(self.spin_bb_center_min)
+        _bb_center_lay.addWidget(self._lbl_bb_center_to)
+        _bb_center_lay.addWidget(self.spin_bb_center_max)
         _bb_center_lay.addStretch()
 
-        self.spin_bb_spacing_nm = NoScrollDoubleSpinBox()
-        self.spin_bb_spacing_nm.setRange(0.1, 5.0)
-        self.spin_bb_spacing_nm.setValue(1.0)
-        self.spin_bb_spacing_nm.setSuffix("  nm")
-        self.spin_bb_spacing_nm.setDecimals(1)
-        self.spin_bb_spacing_nm.setSingleStep(0.1)
+        # ── Spacing ───────────────────────────────────────────────────────
+        self.combo_bb_spacing_mode = NoScrollComboBox()
+        self.combo_bb_spacing_mode.addItems(["Fixed", "Random range"])
+        self.combo_bb_spacing_mode.setFixedWidth(120)
+        self.combo_bb_spacing_mode.currentIndexChanged.connect(self._on_bb_spacing_mode_changed)
 
-        self.chk_bb_auto_spacing = QCheckBox("Auto (always span 10 nm)")
-        self.chk_bb_auto_spacing.setChecked(False)
-        self.chk_bb_auto_spacing.toggled.connect(self._on_bb_auto_spacing_toggled)
+        self.spin_bb_spacing_fixed = NoScrollDoubleSpinBox()
+        self.spin_bb_spacing_fixed.setRange(0.1, 50.0)
+        self.spin_bb_spacing_fixed.setValue(10.0 / 7.0)
+        self.spin_bb_spacing_fixed.setSuffix("  nm")
+        self.spin_bb_spacing_fixed.setDecimals(3)
+        self.spin_bb_spacing_fixed.setSingleStep(0.1)
 
-        _bb_sp_ctr = QWidget()
-        _bb_sp_lay = QHBoxLayout(_bb_sp_ctr)
-        _bb_sp_lay.setContentsMargins(0, 0, 0, 0)
-        _bb_sp_lay.addWidget(self.spin_bb_spacing_nm)
-        _bb_sp_lay.addSpacing(8)
-        _bb_sp_lay.addWidget(self.chk_bb_auto_spacing)
-        _bb_sp_lay.addStretch()
+        self.spin_bb_spacing_min = NoScrollDoubleSpinBox()
+        self.spin_bb_spacing_min.setRange(0.1, 50.0)
+        self.spin_bb_spacing_min.setValue(1.0)
+        self.spin_bb_spacing_min.setSuffix("  nm")
+        self.spin_bb_spacing_min.setDecimals(3)
+        self.spin_bb_spacing_min.setSingleStep(0.1)
 
-        self.combo_bb_amp_mode = QComboBox()
-        self.combo_bb_amp_mode.addItems(["All equal", "Random", "Manual per-channel"])
+        self._lbl_bb_spacing_to = QLabel(" – ")
+
+        self.spin_bb_spacing_max = NoScrollDoubleSpinBox()
+        self.spin_bb_spacing_max.setRange(0.1, 50.0)
+        self.spin_bb_spacing_max.setValue(2.0)
+        self.spin_bb_spacing_max.setSuffix("  nm")
+        self.spin_bb_spacing_max.setDecimals(3)
+        self.spin_bb_spacing_max.setSingleStep(0.1)
+
+        self.chk_bb_spacing_primary = QCheckBox(
+            "Use spacing as primary driver  (overrides span÷7)"
+        )
+        self.chk_bb_spacing_primary.setChecked(False)
+        self.chk_bb_spacing_primary.toggled.connect(self._update_summary)
+
+        _bb_spacing_w = QWidget()
+        _bb_spacing_lay = QHBoxLayout(_bb_spacing_w)
+        _bb_spacing_lay.setContentsMargins(0, 0, 0, 0)
+        _bb_spacing_lay.addWidget(self.combo_bb_spacing_mode)
+        _bb_spacing_lay.addSpacing(8)
+        _bb_spacing_lay.addWidget(self.spin_bb_spacing_fixed)
+        _bb_spacing_lay.addWidget(self.spin_bb_spacing_min)
+        _bb_spacing_lay.addWidget(self._lbl_bb_spacing_to)
+        _bb_spacing_lay.addWidget(self.spin_bb_spacing_max)
+        _bb_spacing_lay.addStretch()
+
+        # ── Amplitude ─────────────────────────────────────────────────────
+        self.combo_bb_amp_mode = NoScrollComboBox()
+        self.combo_bb_amp_mode.addItems(["Fixed", "Random range", "Manual per-channel"])
         self.combo_bb_amp_mode.currentIndexChanged.connect(self._on_bb_amp_mode_changed)
 
-        self._lbl_bb_amp_equal = QLabel("Amplitude:")
-        self.spin_bb_amp_equal = NoScrollSpinBox()
-        self.spin_bb_amp_equal.setRange(0, 1000)
-        self.spin_bb_amp_equal.setValue(500)
+        self._lbl_bb_amp_fixed = QLabel("Amplitude:")
+        self.spin_bb_amp_fixed = NoScrollSpinBox()
+        self.spin_bb_amp_fixed.setRange(0, 1000)
+        self.spin_bb_amp_fixed.setValue(500)
 
         self._lbl_bb_amp_rand = QLabel("Amp range:")
         self.spin_bb_amp_min = NoScrollSpinBox()
@@ -380,15 +445,21 @@ class LoopTab(QWidget):
         self.spin_bb_emission_pct.setValue(100)
         self.spin_bb_emission_pct.setSuffix("  %")
 
+        self.spin_bb_seed = NoScrollSpinBox()
+        self.spin_bb_seed.setRange(0, 999999)
+        self.spin_bb_seed.setValue(42)
+
         form_bb.addRow("N steps:", self.spin_bb_steps)
-        form_bb.addRow("Center range:", _bb_wl_ctr)
-        form_bb.addRow("Fixed center:", _bb_center_ctr)
-        form_bb.addRow("Channel spacing:", _bb_sp_ctr)
+        form_bb.addRow("Span:", _bb_span_w)
+        form_bb.addRow("Center:", _bb_center_w)
+        form_bb.addRow("Spacing:", _bb_spacing_w)
+        form_bb.addRow("", self.chk_bb_spacing_primary)
         form_bb.addRow("Amplitude mode:", self.combo_bb_amp_mode)
-        form_bb.addRow(self._lbl_bb_amp_equal, self.spin_bb_amp_equal)
+        form_bb.addRow(self._lbl_bb_amp_fixed, self.spin_bb_amp_fixed)
         form_bb.addRow(self._lbl_bb_amp_rand, self._bb_amp_rand_widget)
         form_bb.addRow(self._lbl_bb_amp_manual, self._bb_amp_manual_widget)
         form_bb.addRow("Emission:", self.spin_bb_emission_pct)
+        form_bb.addRow("Seed:", self.spin_bb_seed)
         prepare_group_box(self.grp_broadband)
         root.addWidget(self.grp_broadband)
 
@@ -431,6 +502,48 @@ class LoopTab(QWidget):
         prepare_group_box(grp_rep)
         root.addWidget(grp_rep)
 
+        # ── Inline Test Set ───────────────────────────────────────────────
+        grp_test = QGroupBox("Inline Test Set")
+        _test_vlay = QVBoxLayout(grp_test)
+        _test_vlay.setSpacing(8)
+        _test_vlay.setContentsMargins(12, 14, 12, 12)
+
+        self.chk_inline_test = QCheckBox(
+            "Enable inline test set after each round"
+        )
+        self.chk_inline_test.setStyleSheet(checkbox_emphasis("#89b4fa"))
+        self.chk_inline_test.toggled.connect(self._on_inline_test_toggled)
+        _test_vlay.addWidget(self.chk_inline_test)
+
+        self._inline_test_options = QWidget()
+        _itopt_lay = QFormLayout(self._inline_test_options)
+        _itopt_lay.setContentsMargins(0, 4, 0, 0)
+        configure_form_layout(_itopt_lay)
+
+        self.spin_inline_test_pct = NoScrollDoubleSpinBox()
+        self.spin_inline_test_pct.setRange(1.0, 100.0)
+        self.spin_inline_test_pct.setValue(10.0)
+        self.spin_inline_test_pct.setSuffix("  %")
+        self.spin_inline_test_pct.setDecimals(1)
+        self.spin_inline_test_pct.setSingleStep(1.0)
+        self.spin_inline_test_pct.setToolTip(
+            "Fraction of steps randomly sampled per round for the test capture"
+        )
+
+        self.spin_inline_test_seed_offset = NoScrollSpinBox()
+        self.spin_inline_test_seed_offset.setRange(0, 9999)
+        self.spin_inline_test_seed_offset.setValue(0)
+        self.spin_inline_test_seed_offset.setToolTip(
+            "Added to (main_seed + round_idx×1000) for reproducible test-set selection"
+        )
+
+        _itopt_lay.addRow("Test fraction:", self.spin_inline_test_pct)
+        _itopt_lay.addRow("Seed offset:", self.spin_inline_test_seed_offset)
+        _test_vlay.addWidget(self._inline_test_options)
+
+        prepare_group_box(grp_test)
+        root.addWidget(grp_test)
+
         # Summary
         self.lbl_summary = QLabel()
         self.lbl_summary.setStyleSheet(
@@ -445,18 +558,24 @@ class LoopTab(QWidget):
                   self.spin_amp_min, self.spin_amp_max,
                   self.spin_single_wl_min, self.spin_single_wl_max,
                   self.spin_single_step, self.spin_single_amplitude,
-                  self.spin_bb_steps, self.spin_bb_wl_min, self.spin_bb_wl_max,
-                  self.spin_bb_center_nm, self.spin_bb_spacing_nm,
-                  self.spin_bb_amp_equal, self.spin_bb_amp_min, self.spin_bb_amp_max,
-                  self.spin_bb_emission_pct] + self.spins_bb_amp_manual:
+                  self.spin_bb_steps,
+                  self.spin_bb_span_fixed, self.spin_bb_span_min, self.spin_bb_span_max,
+                  self.spin_bb_center_fixed, self.spin_bb_center_min, self.spin_bb_center_max,
+                  self.spin_bb_spacing_fixed, self.spin_bb_spacing_min, self.spin_bb_spacing_max,
+                  self.spin_bb_amp_fixed, self.spin_bb_amp_min, self.spin_bb_amp_max,
+                  self.spin_bb_emission_pct, self.spin_bb_seed,
+                  self.spin_inline_test_pct, self.spin_inline_test_seed_offset,
+                  ] + self.spins_bb_amp_manual:
             w.valueChanged.connect(self._update_summary)
         self._rebuild_round_combo()
         self._on_training_toggled(False)
+        self._on_inline_test_toggled(False)
         self._update_summary()
         self._on_mode_changed(0)
         self._on_spacing_changed(0)
-        self._on_bb_fixed_center_toggled(False)
-        self._on_bb_auto_spacing_toggled(False)
+        self._on_bb_span_mode_changed(0)
+        self._on_bb_center_mode_changed(0)
+        self._on_bb_spacing_mode_changed(0)
         self._on_bb_amp_mode_changed(0)
 
     def _on_mode_changed(self, idx: int):
@@ -475,21 +594,41 @@ class LoopTab(QWidget):
         self.spin_spacing_max.setVisible(not is_grid)
         self._update_summary()
 
-    def _on_bb_fixed_center_toggled(self, checked: bool):
-        self.spin_bb_center_nm.setEnabled(checked)
+    def _on_bb_span_mode_changed(self, idx: int):
+        is_random = (idx == 1)
+        self.spin_bb_span_fixed.setVisible(not is_random)
+        self.spin_bb_span_min.setVisible(is_random)
+        self._lbl_bb_span_to.setVisible(is_random)
+        self.spin_bb_span_max.setVisible(is_random)
         self._update_summary()
 
-    def _on_bb_auto_spacing_toggled(self, checked: bool):
-        self.spin_bb_spacing_nm.setEnabled(not checked)
+    def _on_bb_center_mode_changed(self, idx: int):
+        is_random = (idx == 1)
+        self.spin_bb_center_fixed.setVisible(not is_random)
+        self.spin_bb_center_min.setVisible(is_random)
+        self._lbl_bb_center_to.setVisible(is_random)
+        self.spin_bb_center_max.setVisible(is_random)
+        self._update_summary()
+
+    def _on_bb_spacing_mode_changed(self, idx: int):
+        is_random = (idx == 1)
+        self.spin_bb_spacing_fixed.setVisible(not is_random)
+        self.spin_bb_spacing_min.setVisible(is_random)
+        self._lbl_bb_spacing_to.setVisible(is_random)
+        self.spin_bb_spacing_max.setVisible(is_random)
         self._update_summary()
 
     def _on_bb_amp_mode_changed(self, idx: int):
-        self._lbl_bb_amp_equal.setVisible(idx == 0)
-        self.spin_bb_amp_equal.setVisible(idx == 0)
+        self._lbl_bb_amp_fixed.setVisible(idx == 0)
+        self.spin_bb_amp_fixed.setVisible(idx == 0)
         self._lbl_bb_amp_rand.setVisible(idx == 1)
         self._bb_amp_rand_widget.setVisible(idx == 1)
         self._lbl_bb_amp_manual.setVisible(idx == 2)
         self._bb_amp_manual_widget.setVisible(idx == 2)
+        self._update_summary()
+
+    def _on_inline_test_toggled(self, checked: bool):
+        self._inline_test_options.setVisible(checked)
         self._update_summary()
 
     def _update_summary(self):
@@ -539,34 +678,48 @@ class LoopTab(QWidget):
         if mode == 3:
             n_steps = self.spin_bb_steps.value()
             total = n_steps * n_repeats
-            if self.chk_bb_fixed_center.isChecked():
-                center_info = f"center={self.spin_bb_center_nm.value():.1f} nm (fixed)"
+            spacing_primary = self.chk_bb_spacing_primary.isChecked()
+            if spacing_primary:
+                sp_mode = self.combo_bb_spacing_mode.currentIndex()
+                if sp_mode == 0:
+                    sp = self.spin_bb_spacing_fixed.value()
+                    layout_info = f"spacing={sp:.3f}nm (fixed, span≈{sp * 7:.2f}nm)"
+                else:
+                    sp_mn = self.spin_bb_spacing_min.value()
+                    sp_mx = self.spin_bb_spacing_max.value()
+                    layout_info = f"spacing∈[{sp_mn:.3f}–{sp_mx:.3f}]nm (random)"
             else:
-                center_info = (
-                    f"center in [{self.spin_bb_wl_min.value():.1f}–"
-                    f"{self.spin_bb_wl_max.value():.1f}] nm (random)"
-                )
-            if self.chk_bb_auto_spacing.isChecked():
-                spacing_info = f"spacing=auto (≈{10/7:.2f} nm, span=10 nm)"
+                span_mode = self.combo_bb_span_mode.currentIndex()
+                if span_mode == 0:
+                    sp = self.spin_bb_span_fixed.value()
+                    layout_info = f"span={sp:.2f}nm (fixed, spacing≈{sp / 7:.3f}nm)"
+                else:
+                    sp_mn = self.spin_bb_span_min.value()
+                    sp_mx = self.spin_bb_span_max.value()
+                    layout_info = f"span∈[{sp_mn:.2f}–{sp_mx:.2f}]nm (random)"
+            center_mode = self.combo_bb_center_mode.currentIndex()
+            if center_mode == 0:
+                center_info = f"center={self.spin_bb_center_fixed.value():.1f}nm (fixed)"
             else:
-                _sp_nm = self.spin_bb_spacing_nm.value()
-                spacing_info = f"spacing={_sp_nm:.1f} nm (span≈{_sp_nm * 7:.1f} nm)"
+                c_mn = self.spin_bb_center_min.value()
+                c_mx = self.spin_bb_center_max.value()
+                center_info = f"center∈[{c_mn:.1f}–{c_mx:.1f}]nm (random)"
             amp_idx = self.combo_bb_amp_mode.currentIndex()
             if amp_idx == 0:
-                amp_info = f"amp={self.spin_bb_amp_equal.value()} (all equal)"
+                amp_info = f"amp={self.spin_bb_amp_fixed.value()} (fixed)"
             elif amp_idx == 1:
                 amp_info = (
-                    f"amp={self.spin_bb_amp_min.value()}–"
-                    f"{self.spin_bb_amp_max.value()} (random)"
+                    f"amp∈[{self.spin_bb_amp_min.value()}–"
+                    f"{self.spin_bb_amp_max.value()}] (random)"
                 )
             else:
                 _vals = [w.value() for w in self.spins_bb_amp_manual]
                 amp_info = f"amp=[{','.join(str(v) for v in _vals)}] (manual)"
             self.lbl_summary.setText(
-                f"  Broadband: 8 channels, 10 nm span\n"
-                f"  {center_info},  {spacing_info}\n"
+                f"  Broadband 8ch: {layout_info}\n"
+                f"  {center_info},  {amp_info}\n"
                 f"  {n_steps} configs × {n_repeats} repeats = {total} captures\n"
-                f"  {amp_info}"
+                f"  seed={self.spin_bb_seed.value()}"
             )
             return
 
@@ -646,21 +799,34 @@ class LoopTab(QWidget):
             base["single_step"]    = self.spin_single_step.value()
             base["single_amp"]     = self.spin_single_amplitude.value()
 
+        base["inline_test_enabled"]     = self.chk_inline_test.isChecked()
+        base["inline_test_pct"]         = self.spin_inline_test_pct.value()
+        base["inline_test_seed_offset"] = self.spin_inline_test_seed_offset.value()
+
         if mode == 3:
-            _amp_mode_labels = ["equal", "random", "manual"]
+            _amp_mode_labels = ["fixed", "random", "manual"]
             base.update({
-                "bb_wl_min":       self.spin_bb_wl_min.value(),
-                "bb_wl_max":       self.spin_bb_wl_max.value(),
-                "bb_fixed_center": self.chk_bb_fixed_center.isChecked(),
-                "bb_center_nm":    self.spin_bb_center_nm.value(),
-                "bb_spacing_nm":   self.spin_bb_spacing_nm.value(),
-                "bb_auto_spacing": self.chk_bb_auto_spacing.isChecked(),
-                "bb_amp_mode":     _amp_mode_labels[self.combo_bb_amp_mode.currentIndex()],
-                "bb_amp_equal":    self.spin_bb_amp_equal.value(),
-                "bb_amp_min":      self.spin_bb_amp_min.value(),
-                "bb_amp_max":      self.spin_bb_amp_max.value(),
-                "bb_amp_manual":   [w.value() for w in self.spins_bb_amp_manual],
-                "bb_emission_pct": self.spin_bb_emission_pct.value(),
+                "bb_span_mode":      "fixed" if self.combo_bb_span_mode.currentIndex() == 0 else "random",
+                "bb_span_fixed":     self.spin_bb_span_fixed.value(),
+                "bb_span_min":       self.spin_bb_span_min.value(),
+                "bb_span_max":       self.spin_bb_span_max.value(),
+                "bb_center_mode":    "fixed" if self.combo_bb_center_mode.currentIndex() == 0 else "random",
+                "bb_center_fixed":   self.spin_bb_center_fixed.value(),
+                "bb_center_min":     self.spin_bb_center_min.value(),
+                "bb_center_max":     self.spin_bb_center_max.value(),
+                "bb_spacing_mode":   "fixed" if self.combo_bb_spacing_mode.currentIndex() == 0 else "random",
+                "bb_spacing_fixed":  self.spin_bb_spacing_fixed.value(),
+                "bb_spacing_min":    self.spin_bb_spacing_min.value(),
+                "bb_spacing_max":    self.spin_bb_spacing_max.value(),
+                "bb_spacing_primary": self.chk_bb_spacing_primary.isChecked(),
+                "bb_amp_mode":       _amp_mode_labels[self.combo_bb_amp_mode.currentIndex()],
+                "bb_amp_fixed":      self.spin_bb_amp_fixed.value(),
+                "bb_amp_min":        self.spin_bb_amp_min.value(),
+                "bb_amp_max":        self.spin_bb_amp_max.value(),
+                "bb_amp_manual":     [w.value() for w in self.spins_bb_amp_manual],
+                "bb_emission_pct":   self.spin_bb_emission_pct.value(),
+                "bb_seed":           self.spin_bb_seed.value(),
+                "bb_steps":          self.spin_bb_steps.value(),
             })
 
         return base
@@ -774,22 +940,44 @@ class LoopTab(QWidget):
             # Broadband fields (always restore so round-switching works)
             if cfg.get("mode") == 3:
                 self.spin_bb_steps.setValue(int(cfg.get("n_steps", 50)))
-            self.spin_bb_wl_min.setValue(float(cfg.get("bb_wl_min", 620.0)))
-            self.spin_bb_wl_max.setValue(float(cfg.get("bb_wl_max", 670.0)))
-            self.chk_bb_fixed_center.setChecked(bool(cfg.get("bb_fixed_center", False)))
-            self.spin_bb_center_nm.setValue(float(cfg.get("bb_center_nm", 645.0)))
-            self.spin_bb_spacing_nm.setValue(float(cfg.get("bb_spacing_nm", 1.0)))
-            self.chk_bb_auto_spacing.setChecked(bool(cfg.get("bb_auto_spacing", False)))
-            _amp_mode_map = {"equal": 0, "random": 1, "manual": 2}
+            _bb_mode_map = {"fixed": 0, "random": 1}
+            self.combo_bb_span_mode.setCurrentIndex(
+                _bb_mode_map.get(cfg.get("bb_span_mode", "fixed"), 0))
+            self.spin_bb_span_fixed.setValue(float(cfg.get("bb_span_fixed", 10.0)))
+            self.spin_bb_span_min.setValue(float(cfg.get("bb_span_min", 5.0)))
+            self.spin_bb_span_max.setValue(float(cfg.get("bb_span_max", 20.0)))
+            self.combo_bb_center_mode.setCurrentIndex(
+                _bb_mode_map.get(cfg.get("bb_center_mode", "fixed"), 0))
+            self.spin_bb_center_fixed.setValue(float(cfg.get("bb_center_fixed", 645.0)))
+            self.spin_bb_center_min.setValue(float(cfg.get("bb_center_min", 620.0)))
+            self.spin_bb_center_max.setValue(float(cfg.get("bb_center_max", 670.0)))
+            self.combo_bb_spacing_mode.setCurrentIndex(
+                _bb_mode_map.get(cfg.get("bb_spacing_mode", "fixed"), 0))
+            self.spin_bb_spacing_fixed.setValue(float(cfg.get("bb_spacing_fixed", 10.0 / 7.0)))
+            self.spin_bb_spacing_min.setValue(float(cfg.get("bb_spacing_min", 1.0)))
+            self.spin_bb_spacing_max.setValue(float(cfg.get("bb_spacing_max", 2.0)))
+            self.chk_bb_spacing_primary.setChecked(bool(cfg.get("bb_spacing_primary", False)))
+            _amp_mode_map = {"fixed": 0, "random": 1, "manual": 2}
             self.combo_bb_amp_mode.setCurrentIndex(
-                _amp_mode_map.get(cfg.get("bb_amp_mode", "equal"), 0))
-            self.spin_bb_amp_equal.setValue(int(cfg.get("bb_amp_equal", 500)))
+                _amp_mode_map.get(cfg.get("bb_amp_mode", "fixed"), 0))
+            self.spin_bb_amp_fixed.setValue(int(cfg.get("bb_amp_fixed", 500)))
             self.spin_bb_amp_min.setValue(int(cfg.get("bb_amp_min", 200)))
             self.spin_bb_amp_max.setValue(int(cfg.get("bb_amp_max", 1000)))
             _bb_manual = cfg.get("bb_amp_manual", [500] * 8)
             for _bmi, _bsp in enumerate(self.spins_bb_amp_manual):
                 _bsp.setValue(int(_bb_manual[_bmi]) if _bmi < len(_bb_manual) else 500)
             self.spin_bb_emission_pct.setValue(int(cfg.get("bb_emission_pct", 100)))
+            self.spin_bb_seed.setValue(int(cfg.get("bb_seed", 42)))
+            self._on_bb_span_mode_changed(self.combo_bb_span_mode.currentIndex())
+            self._on_bb_center_mode_changed(self.combo_bb_center_mode.currentIndex())
+            self._on_bb_spacing_mode_changed(self.combo_bb_spacing_mode.currentIndex())
+            self._on_bb_amp_mode_changed(self.combo_bb_amp_mode.currentIndex())
+            self.chk_inline_test.setChecked(bool(cfg.get("inline_test_enabled", False)))
+            self.spin_inline_test_pct.setValue(float(cfg.get("inline_test_pct", 10.0)))
+            self.spin_inline_test_seed_offset.setValue(
+                int(cfg.get("inline_test_seed_offset", 0))
+            )
+            self._on_inline_test_toggled(self.chk_inline_test.isChecked())
             if self._main_win and hasattr(self._main_win, "nkt_tab"):
                 wls = cfg.get("manual_wavelengths")
                 amps = cfg.get("manual_amplitudes")

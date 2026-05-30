@@ -578,52 +578,73 @@ def build_nkt_step_configs(cfg: dict) -> List[dict]:
 
     # ── Broadband (mode == 3) ─────────────────────────────────────────────
     if mode == 3:
-        bb_wl_min       = float(cfg.get("bb_wl_min", 620.0))
-        bb_wl_max       = float(cfg.get("bb_wl_max", 670.0))
-        bb_fixed_center = bool(cfg.get("bb_fixed_center", False))
-        bb_center_nm    = float(cfg.get("bb_center_nm", 645.0))
-        bb_auto_spacing = bool(cfg.get("bb_auto_spacing", False))
-        bb_spacing_nm   = float(cfg.get("bb_spacing_nm", 1.0))
-        bb_amp_mode     = cfg.get("bb_amp_mode", "equal")
-        bb_amp_equal    = int(cfg.get("bb_amp_equal", 500))
+        bb_seed         = int(cfg.get("bb_seed", cfg.get("seed", 42)))
+        bb_amp_mode     = cfg.get("bb_amp_mode", "fixed")
+        bb_amp_fixed    = int(cfg.get("bb_amp_fixed", cfg.get("bb_amp_equal", 500)))
         bb_amp_min_v    = int(cfg.get("bb_amp_min", 200))
         bb_amp_max_v    = int(cfg.get("bb_amp_max", 1000))
         bb_amp_manual   = [int(a) for a in cfg.get("bb_amp_manual", [500] * 8)]
         bb_emission     = int(cfg.get("bb_emission_pct", 100))
-        rng = _np.random.default_rng(int(cfg.get("seed", 42)))
-        spacing = 10.0 / 7.0 if bb_auto_spacing else bb_spacing_nm
-        configs = []
+        bb_spacing_primary = bool(cfg.get("bb_spacing_primary", False))
+
+        rng = _np.random.default_rng(bb_seed)
+        step_cfgs = []
         for _ in range(n_steps):
-            if bb_fixed_center:
-                center = bb_center_nm
+            # 1. Determine spacing (primary driver)
+            if bb_spacing_primary:
+                if cfg.get("bb_spacing_mode", "fixed") == "fixed":
+                    spacing = float(cfg.get("bb_spacing_fixed", 10.0 / 7.0))
+                else:
+                    spacing = float(rng.uniform(
+                        cfg.get("bb_spacing_min", 1.0),
+                        cfg.get("bb_spacing_max", 2.0),
+                    ))
+                span = spacing * 7.0
             else:
-                lo, hi = bb_wl_min + 5.0, bb_wl_max - 5.0
-                center = (
-                    float(rng.uniform(lo, hi)) if lo < hi
-                    else (bb_wl_min + bb_wl_max) / 2.0
-                )
-            wls = [
-                round(max(500.0, min(900.0, center + spacing * (i - 3.5))), 1)
-                for i in range(8)
-            ]
-            if bb_amp_mode == "random":
+                if cfg.get("bb_span_mode", "fixed") == "fixed":
+                    span = float(cfg.get("bb_span_fixed", 10.0))
+                else:
+                    span = float(rng.uniform(
+                        cfg.get("bb_span_min", 5.0),
+                        cfg.get("bb_span_max", 20.0),
+                    ))
+                spacing = span / 7.0
+
+            # 2. Center wavelength
+            if cfg.get("bb_center_mode", "fixed") == "fixed":
+                center = float(cfg.get("bb_center_fixed", 645.0))
+            else:
+                center = float(rng.uniform(
+                    cfg.get("bb_center_min", 620.0),
+                    cfg.get("bb_center_max", 670.0),
+                ))
+
+            # 3. 8 channel wavelengths evenly spaced around center
+            offsets = _np.linspace(-span / 2.0, span / 2.0, 8)
+            wls = _np.clip(center + offsets, 500.0, 900.0).tolist()
+            wls = [round(w, 1) for w in wls]
+
+            # 4. Amplitudes
+            if bb_amp_mode == "fixed":
+                amps = [bb_amp_fixed] * 8
+            elif bb_amp_mode == "random":
                 amps = rng.integers(bb_amp_min_v, bb_amp_max_v + 1, size=8).tolist()
-            elif bb_amp_mode == "manual":
+            else:  # manual
                 amps = (bb_amp_manual + [500] * 8)[:8]
-            else:
-                amps = [bb_amp_equal] * 8
+
             label = (
-                f"Broadband: center={center:.1f}nm  "
-                f"span={spacing * 7:.1f}nm  "
+                f"BB center={center:.1f}nm  "
+                f"span={span:.2f}nm  "
+                f"sp={spacing:.3f}nm  "
                 f"amps={amps}"
             )
-            configs.append({
+            step_cfgs.append({
                 "wavelengths": wls,
                 "amplitudes":  amps,
                 "emission":    bb_emission,
                 "label":       label,
             })
-        return configs
+        return step_cfgs
 
     # ── Random Multi-Peak (mode == 0) ─────────────────────────────────────
     seed = int(cfg.get("seed", 42))

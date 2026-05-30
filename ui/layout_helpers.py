@@ -13,6 +13,8 @@ from PyQt5.QtWidgets import (
     QFrame,
     QSpinBox,
     QDoubleSpinBox,
+    QComboBox,
+    QSlider,
 )
 from PyQt5.QtCore import Qt
 
@@ -72,6 +74,20 @@ class NoScrollSpinBox(QSpinBox):
 
 class NoScrollDoubleSpinBox(QDoubleSpinBox):
     """QDoubleSpinBox that ignores mouse-wheel events so scroll only moves the view."""
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class NoScrollComboBox(QComboBox):
+    """QComboBox that ignores mouse-wheel events so scroll only moves the view."""
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class NoScrollSlider(QSlider):
+    """QSlider that ignores mouse-wheel events so scroll only moves the view."""
 
     def wheelEvent(self, event):
         event.ignore()

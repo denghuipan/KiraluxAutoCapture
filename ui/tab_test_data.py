@@ -10,7 +10,7 @@ import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel,
-    QLineEdit, QPushButton, QComboBox, QCheckBox,
+    QLineEdit, QPushButton, QCheckBox,
     QFileDialog, QFrame, QTextEdit, QSizePolicy,
 )
 from PyQt5.QtCore import Qt
@@ -24,7 +24,7 @@ from matplotlib.figure import Figure
 from ui.style_helpers import hint, muted, mpl_font_size
 from ui.layout_helpers import (
     install_scroll_content, configure_form_layout, prepare_group_box, GROUP_SPACING,
-    NoScrollSpinBox, NoScrollDoubleSpinBox,
+    NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox,
 )
 from core.power_math import dbm_to_watts, pm_watts_for_target, watts_to_dbm
 
@@ -100,7 +100,7 @@ class TestDataTab(QWidget):
         configure_form_layout(form_l)
 
         # Wavelength source selector (Manual vs From Loop Tab)
-        self.combo_wl_source = QComboBox()
+        self.combo_wl_source = NoScrollComboBox()
         self.combo_wl_source.addItem("Manual")
         self.combo_wl_source.addItem("From Loop Tab")
         self.combo_wl_source.setToolTip(
@@ -242,7 +242,7 @@ class TestDataTab(QWidget):
             "Lower = faster sweep (may be noisier); higher = slower, more stable readings."
         )
 
-        self.combo_rf_algo = QComboBox()
+        self.combo_rf_algo = NoScrollComboBox()
         self.combo_rf_algo.addItem("Linear ramp")
         self.combo_rf_algo.addItem("Binary search")
         self.combo_rf_algo.setToolTip(
@@ -277,7 +277,7 @@ class TestDataTab(QWidget):
         grp_pm = QGroupBox("Power Meter (PM100D — USB/VISA)")
         form_p = QFormLayout(grp_pm)
         configure_form_layout(form_p)
-        self.combo_pm = QComboBox()
+        self.combo_pm = NoScrollComboBox()
         self.combo_pm.addItem("PM100D (USB / VISA)", "pm100d")
         self.combo_pm.addItem("Simulated (development)", "simulated")
 
@@ -400,7 +400,7 @@ class TestDataTab(QWidget):
         pm_values_row.addWidget(self.lbl_live_target)
 
         # Unit selector
-        self.combo_pm_unit = QComboBox()
+        self.combo_pm_unit = NoScrollComboBox()
         self.combo_pm_unit.addItems(["dBm", "W (auto)"])
         self.combo_pm_unit.setToolTip(
             "Display unit for Actual power.\n"

@@ -243,7 +243,7 @@ class LoopRunner(QThread):
         all_osa_rows = []
         done = 0
 
-        for pass_cfg in pass_cfgs:
+        for pi, pass_cfg in enumerate(pass_cfgs):
             if self._stop_flag.is_set():
                 break
             round_idx = pass_cfg.get("training_round_index")
@@ -269,6 +269,20 @@ class LoopRunner(QThread):
                 total_captures=total_captures,
             )
             all_osa_rows.extend(osa_rows)
+
+            if not self._stop_flag.is_set() and pass_cfg.get("inline_test_enabled"):
+                self._run_inline_test(
+                    pi, pass_cfg,
+                    camera=camera,
+                    camera_roi=camera_roi,
+                    camera_ok=camera_ok,
+                    extreme=extreme,
+                    RF_power=RF_power,
+                    emission=emission,
+                    comport=comport,
+                    osa_sock=osa_sock,
+                    osa_only=osa_only,
+                )
 
         # ── Cleanup ───────────────────────────────────────────────────────
         if extreme is not None:
@@ -434,6 +448,121 @@ class LoopRunner(QThread):
                 self.progress_signal.emit(pct, status)
 
         return done, osa_rows
+
+    # ── Inline test-set capture ────────────────────────────────────────────
+    def _run_inline_test(
+        self,
+        pass_idx: int,
+        pass_cfg: dict,
+        *,
+        camera,
+        camera_roi,
+        camera_ok: bool,
+        extreme,
+        RF_power,
+        emission: int,
+        comport: str,
+        osa_sock,
+        osa_only: bool,
+    ):
+        """Capture one image + one OSA measurement for a random subset of the
+        round's step configs, saving results to <out_dir>/test/."""
+        from core.camera_support import frame_to_image
+
+        pct        = float(pass_cfg.get("inline_test_pct", 10.0))
+        seed_off   = int(pass_cfg.get("inline_test_seed_offset", 0))
+        main_seed  = int(pass_cfg.get("seed", 42))
+        mode       = pass_cfg.get("mode", 0)
+        n_steps    = pass_cfg.get("n_steps", 10)
+        start_idx  = pass_cfg.get("start_index", 1)
+        settle_s   = pass_cfg.get("laser_settle_s", 0.5)
+        out_dir    = pass_cfg.get("out_dir", ".")
+        prefix     = pass_cfg.get("file_prefix", "img_loop")
+        img_fmt    = pass_cfg.get("img_format", "tif")
+        round_idx  = pass_cfg.get("training_round_index")
+
+        test_dir = os.path.join(out_dir, "test")
+        os.makedirs(test_dir, exist_ok=True)
+
+        configs = self._build_configs(pass_cfg, mode, n_steps)
+        if not configs:
+            self.warn_signal.emit("[TEST] No configs available for inline test set.")
+            return
+
+        n_test = max(1, round(len(configs) * pct / 100))
+        rng_seed = main_seed + pass_idx * 1000 + seed_off
+        rng = np.random.default_rng(rng_seed)
+        sampled_indices = sorted(
+            rng.choice(len(configs), size=min(n_test, len(configs)), replace=False).tolist()
+        )
+
+        round_label = f"Round {round_idx}" if round_idx is not None else "pass"
+        self.log_signal.emit(
+            f"[TEST] {round_label}: sampling {len(sampled_indices)}/{len(configs)} steps "
+            f"(seed={rng_seed}, pct={pct:.0f}%)  →  {test_dir}"
+        )
+
+        for idx in sampled_indices:
+            if self._stop_flag.is_set():
+                break
+
+            step_cfg   = configs[idx]
+            wls        = step_cfg["wavelengths"]
+            amps       = step_cfg["amplitudes"]
+            loop_i     = idx + start_idx
+            _step_emission = step_cfg.get("emission", emission)
+
+            _step_label = step_cfg.get("label")
+            if _step_label:
+                self.log_signal.emit(f"[TEST] {round_label} step {loop_i}  |  {_step_label}")
+            else:
+                self.log_signal.emit(
+                    f"[TEST] {round_label} step {loop_i}  |  "
+                    f"{len(wls)}ch: {[f'{w}nm' for w in wls]}"
+                )
+
+            if extreme is not None:
+                try:
+                    self._nkt_set_multipeaks(
+                        comport, extreme, RF_power, _step_emission, wls, amps,
+                    )
+                    time.sleep(settle_s)
+                except Exception as e:
+                    self.warn_signal.emit(
+                        f"[TEST] NKT set failed at step {loop_i}: {e}"
+                    )
+
+            if camera_ok and not osa_only:
+                img_name = os.path.join(test_dir, f"{prefix}{loop_i}_1.{img_fmt}")
+                try:
+                    camera.issue_software_trigger()
+                    frame = camera.get_pending_frame_or_null()
+                    if frame is not None:
+                        buf = frame_to_image(frame.image_buffer, camera_roi)
+                        self._save_frame(buf, img_name, img_fmt)
+                        self.log_signal.emit(
+                            f"[TEST]   Saved {os.path.basename(img_name)}"
+                        )
+                        h, w = buf.shape
+                        self.camera_frame_signal.emit(
+                            buf, f"[TEST] i={loop_i}  {w}×{h}  max={buf.max()}"
+                        )
+                    else:
+                        self.warn_signal.emit(
+                            f"[TEST] Camera timeout at step {loop_i}"
+                        )
+                except Exception as e:
+                    self.warn_signal.emit(
+                        f"[TEST] Camera error at step {loop_i}: {e}"
+                    )
+
+            if osa_sock is not None:
+                test_osa_cfg = dict(pass_cfg)
+                test_osa_cfg["osa_save_dir"] = test_dir
+                test_osa_cfg["osa_prefix"]   = "osa"
+                self._osa_measure(osa_sock, test_osa_cfg, loop_i, 1, wls, amps, test_dir)
+
+        self.log_signal.emit(f"[TEST] {round_label}: inline test-set complete.")
 
     # ── Config export ──────────────────────────────────────────────────────
     def _export_config_csv(self, cfg, mode, configs, out_dir):

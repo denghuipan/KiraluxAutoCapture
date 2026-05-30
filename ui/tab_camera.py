@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel,
     QPushButton, QLineEdit, QFileDialog, QCheckBox,
-    QComboBox, QSizePolicy, QFrame, QSlider
+    QSizePolicy, QFrame, QSlider
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
