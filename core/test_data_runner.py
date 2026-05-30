@@ -384,6 +384,12 @@ class TestDataRunner(QThread):
                     )
                     osa_wls = multi_cfg["wavelengths"] if multi_cfg is not None else [wl]
 
+                    if cfg.get("bright_enabled"):
+                        self._do_bright_captures(
+                            wl, cfg, camera, camera_roi, nt, out_dir,
+                            com, extreme, rf, multi_cfg, min_amp, exp_ms,
+                        )
+
                     osa_done_for_wl = False
                     for target_dbm in targets_dbm:
                         if self._stop_flag.is_set():
@@ -705,6 +711,118 @@ class TestDataRunner(QThread):
                 writer.writerows(rows)
         except Exception:
             pass
+
+    # ── Bright field pre-capture ───────────────────────────────────────────
+
+    def _do_bright_captures(
+        self,
+        wl: float,
+        cfg: dict,
+        camera,
+        camera_roi,
+        nt,
+        out_dir: str,
+        com: str,
+        extreme,
+        rf,
+        multi_cfg,
+        min_amp: int,
+        test_exp_ms: float,
+    ):
+        """Capture a series of bright-field reference images at high RF power.
+
+        Called once per wavelength step, before the power-servo loop.
+        Sets RF to ``bright_rf_amp``, waits ``bright_settle_s``, captures one
+        frame per configured exposure time, saves to ``<out_dir>/bright/``,
+        then restores camera exposure and RF amplitude to the servo start state.
+        No OSA measurement is performed.
+        """
+        from core.nkt_support import set_channel_amplitude, set_multipeaks_config
+        from core.camera_support import frame_to_image
+
+        bright_amp = int(cfg.get("bright_rf_amp", 1000))
+        settle_s = float(cfg.get("bright_settle_s", 0.5))
+        emission = int(cfg.get("emission_percent", 100))
+
+        try:
+            raw = cfg.get("bright_exposures_ms", "100, 500, 1000, 2000, 5000")
+            exp_list = [
+                float(x.strip()) for x in str(raw).split(",") if x.strip()
+            ]
+        except Exception:
+            exp_list = [100.0, 500.0, 1000.0, 2000.0, 5000.0]
+
+        if not exp_list:
+            return
+
+        bright_dir = os.path.join(out_dir, "bright")
+        os.makedirs(bright_dir, exist_ok=True)
+
+        wl_tag = (
+            f"cwl{wl:.1f}nm" if multi_cfg is not None else f"wl{wl:.3f}nm"
+        )
+
+        # Set RF to bright amplitude (scale proportionally for multi-channel)
+        if multi_cfg is not None:
+            scale = bright_amp / 1000.0
+            scaled_amps = [
+                min(1000, int(round(a * scale)))
+                for a in multi_cfg["amplitudes"]
+            ]
+            nt.call(
+                set_multipeaks_config,
+                com, extreme, rf, emission,
+                multi_cfg["wavelengths"], scaled_amps,
+            )
+        else:
+            nt.call(set_channel_amplitude, com, rf, bright_amp, 0)
+
+        time.sleep(settle_s)
+
+        base_timeout_ms = int(cfg.get("test_timeout_ms", cfg.get("timeout_ms", 5000)))
+
+        for exp_ms in exp_list:
+            if self._stop_flag.is_set():
+                break
+
+            exp_ms_int = int(round(exp_ms))
+            camera.exposure_time_us = int(exp_ms * 1000)
+            # Ensure poll timeout exceeds the exposure duration
+            camera.image_poll_timeout_ms = max(base_timeout_ms, exp_ms_int + 2000)
+            camera.issue_software_trigger()
+            frame = camera.get_pending_frame_or_null()
+            camera.image_poll_timeout_ms = base_timeout_ms  # restore
+
+            if frame is None:
+                self.warn_signal.emit(
+                    f"  [BRIGHT] Camera timeout: λ={wl:.1f}nm "
+                    f"exp={exp_ms_int}ms — skipping"
+                )
+                continue
+
+            buf = frame_to_image(frame.image_buffer, camera_roi)
+            fname = f"{wl_tag}_exp{exp_ms_int}ms.tif"
+            path = os.path.join(bright_dir, fname)
+            self._save_frame(buf, path, "tif")
+            rel = os.path.join("bright", fname)
+            self.log_signal.emit(
+                f"[BRIGHT] λ={wl:.1f}nm exp={exp_ms_int}ms → {rel}"
+            )
+            self.camera_frame_signal.emit(
+                buf,
+                f"BRIGHT  λ={wl:.1f}nm  exp={exp_ms_int}ms  RF={bright_amp}",
+            )
+
+        # Restore camera exposure and RF to pre-servo state
+        camera.exposure_time_us = int(test_exp_ms * 1000)
+        if multi_cfg is not None:
+            nt.call(
+                set_multipeaks_config,
+                com, extreme, rf, emission,
+                multi_cfg["wavelengths"], multi_cfg["amplitudes"],
+            )
+        else:
+            nt.call(set_channel_amplitude, com, rf, min_amp, 0)
 
     # ── OSA helpers ────────────────────────────────────────────────────────
 

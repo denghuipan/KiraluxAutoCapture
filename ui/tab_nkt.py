@@ -6,13 +6,13 @@ import serial.tools.list_ports
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel,
-    QPushButton, QComboBox, QTableWidget, QTableWidgetItem,
+    QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QCheckBox
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
 from ui.style_helpers import muted, warning, error, success
-from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox
+from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox, NoScrollComboBox
 
 
 class NKTTab(QWidget):
@@ -32,7 +32,7 @@ class NKTTab(QWidget):
         conn_layout.setContentsMargins(12, 14, 12, 12)
 
         conn_layout.addWidget(QLabel("COM Port:"))
-        self.combo_port = QComboBox()
+        self.combo_port = NoScrollComboBox()
         self.combo_port.setMinimumWidth(100)
         self._refresh_ports()
         conn_layout.addWidget(self.combo_port)
@@ -44,7 +44,7 @@ class NKTTab(QWidget):
 
         conn_layout.addSpacing(24)
         conn_layout.addWidget(QLabel("Crystal:"))
-        self.combo_crystal = QComboBox()
+        self.combo_crystal = NoScrollComboBox()
         self.combo_crystal.addItems(["0 — VIS (430–690 nm)", "1 — NIR (690–1100 nm)"])
         self.combo_crystal.setMinimumWidth(200)
         conn_layout.addWidget(self.combo_crystal)

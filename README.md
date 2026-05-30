@@ -28,66 +28,56 @@ Place the following directories alongside `autocapture/`:
 
 ## Features
 
-### Hardware Integration
+### Hardware
 
-| Device | Interface | Capabilities |
-|--------|-----------|--------------|
-| **Thorlabs Kiralux** camera | USB 3.0 (SDK) | ROI, exposure (0.03–22806 ms), gain, live preview |
-| **NKT SuperK** Extreme + SELECT | USB/COM | Multi-channel wavelength + RF amplitude control |
-| **Yokogawa OSA** AQ6370D | TCP/IP | Spectrum scanning, Savitzky-Golay reduction |
-| **Thorlabs PM100D** | USB/VISA | Power measurement, dark adjustment, live monitor |
+| Device | Interface |
+|--------|-----------|
+| Thorlabs Kiralux camera | USB 3.0 (SDK) |
+| NKT SuperK Extreme + SELECT | USB/COM (serial) |
+| Yokogawa OSA AQ6370D | TCP/IP |
+| Thorlabs PM100D | USB/VISA (PyVISA) |
 
-### 6 Tab GUI
+### 6 Tabs
 
 | Tab | Purpose |
 |-----|---------|
-| **Hardware Test** | Scan NKT ports, laser bring-up (3-step), test camera/OSA/PM100D |
-| **Camera** | ROI, exposure, gain, auto-crop, image save (TIFF/NPY/DAT), live preview |
-| **NKT Laser** | COM port, crystal (VIS/NIR), 8-channel manual table, test emit |
-| **Auto Loop** | 4 capture modes × 50 training rounds, config CSV export |
-| **OSA** | TCP connection, sweep params, live spectrum plot, H5 export |
-| **Test Data** | RF power servo to target dBm, live power trace, per-step CSV logs |
+| Hardware Test | Verify all device connections |
+| Camera | ROI, exposure/gain, live preview, auto crop, H5 export |
+| NKT Laser | COM port, crystal (VIS/NIR), 8-channel manual table |
+| Auto Loop | 5 capture modes, multi-round training strategy, inline test set |
+| Test Data | RF power servo to target dBm, live power trace, bright field pre-capture |
+| OSA | TCP spectrum scanning, Savitzky-Golay reduction, H5 export |
 
 ### Capture Modes (Auto Loop)
 
 | Mode | Description |
 |------|-------------|
-| **Random Multi-Peak** | N steps with random wavelengths (fixed grid or fully random spacing), configurable amplitude range |
+| **Random Multi-Peak** | N steps with random wavelengths (fixed grid or fully random spacing) |
 | **Manual Multi-Peak** | Fixed 8-channel config from NKT tab, repeated N times |
 | **Single Peak Scan** | Wavelength sweep (start → end, configurable step) |
-| **Broadband** | 8 channels with ~10 nm span, center wavelength control, 3 amplitude modes |
+| **Broadband** | 8 channels with configurable span/center/spacing/amplitude |
+| **Absorption Peak** | 8 channels with configurable absorption dips (baseline + reduced amplitudes) |
 
 ### Training Strategy
 
-- Up to **50 independent rounds**, each with its own capture mode and parameters
+- Up to 50 independent rounds, each with its own mode and parameters
 - Save/restore per-round config with status tracking
-- Total capture count shown before start
+- Inline test set: after each round, auto-capture a reproducible test subset
 
-### RF Power Servo (Test Data Tab)
+### RF Power Servo (Test Data)
 
-- Set **target power (dBm)** with coupling efficiency (scientific notation)
-- Two servo algorithms: **linear ramp** and **binary search**
-- **Live power monitor** before test — stream PM readings without touching NKT/RF
-- Real-time color-coded power-vs-time chart with target band
-- Per-step PM trace CSV with phase labels
-
-### Auto ROI Cropping
-
-- Max-sum sliding window algorithm (configurable signal/outer dimensions)
-- Outputs cropped TIFF + PNG preview per frame
-- Shared between Camera tab and Test Data tab
-
-### HDF5 Dataset Export
-
-- **Image H5**: paired image + labels (`roundXX_loopYY_j`), gzip compressed, optional contrast preprocessing (vmin/vmax clip + scale)
-- **OSA H5**: reduced spectra (Savitzky-Golay smoothing + downsample to N points) with wavelength axis validation
-- Thread-safe append with shape validation
+- Set target power (dBm) with coupling efficiency
+- Two algorithms: linear ramp or binary search
+- Live power monitor (stream PM readings without touching laser)
+- Real-time color-coded power-vs-time chart
+- Bright field pre-capture: multi-exposure images at full RF before servo
 
 ### Other
 
-- **OSA-only mode** — NKT + OSA without camera
+- **Auto ROI crop**: max-sum sliding window, outputs TIFF + PNG per frame
+- **HDF5 export**: paired image/OSA datasets with contrast preprocessing
+- **OSA-only mode**: NKT + OSA without camera
 - **Dark/Light themes** (Catppuccin) with live preview
-- **PyInstaller** executable build (`build_exe.bat`)
 
 ## Build Executable
 
@@ -96,53 +86,6 @@ pyinstaller KiraluxAutoCapture.spec --noconfirm --clean
 ```
 
 Or run `build_exe.bat` from the `autocapture/` directory.
-
-## Project Structure
-
-```
-autocapture/
-├── main.py                      # Entry point
-├── requirements.txt             # Dependencies
-├── KiraluxAutoCapture.spec      # PyInstaller spec
-├── build_exe.bat                # Build script
-├── README.md
-├── MANUAL_en.md / MANUAL_zh.md  # User manuals
-│
-├── core/                        # Business logic
-│   ├── app_settings.py          # Theme + font (QSettings)
-│   ├── camera_support.py        # Camera SDK wrapper
-│   ├── h5_store.py              # HDF5 writers (image + OSA)
-│   ├── hw_tester.py             # Hardware diagnostics
-│   ├── image_contrast.py        # vmin/vmax preprocessing
-│   ├── loop_runner.py           # Auto loop engine (QThread)
-│   ├── nkt_support.py           # NKT SDK wrapper
-│   ├── nkt_thread.py            # Dedicated NKT thread
-│   ├── osa_reduce.py            # Savitzky-Golay reduction
-│   ├── pm_meter.py              # PM100D / simulated power meter
-│   ├── power_math.py            # dBm/W conversions
-│   ├── rf_power_control.py      # RF servo algorithms
-│   ├── roi_postprocess.py       # Auto crop pipeline
-│   ├── sample_label.py          # Paired label generator
-│   └── test_data_runner.py      # Test data engine (QThread)
-│
-├── ui/                          # GUI tabs
-│   ├── main_window.py           # Main window + shared status bar
-│   ├── settings_dialog.py       # Theme + font settings
-│   ├── tab_camera.py            # Camera tab
-│   ├── tab_hardware_test.py     # Hardware test tab
-│   ├── tab_loop.py              # Auto loop tab
-│   ├── tab_nkt.py               # NKT laser tab
-│   ├── tab_osa.py               # OSA tab
-│   ├── tab_test_data.py         # Test data tab
-│   └── layout_helpers.py        # Layout utilities
-│
-├── roi_processor/core/          # ROI algorithms
-│   ├── roi_finder.py            # Max-sum sliding window
-│   └── image_io.py              # TIFF/PNG I/O
-│
-└── tools/
-    └── setup_nkt_x64_dll.py     # NKT DLL setup utility
-```
 
 ## License
 

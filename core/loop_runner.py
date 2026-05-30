@@ -248,7 +248,7 @@ class LoopRunner(QThread):
                 break
             round_idx = pass_cfg.get("training_round_index")
             if round_idx is not None:
-                mode_names = {0: "Random Multi", 1: "Manual", 2: "Single Peak", 3: "Broadband"}
+                mode_names = {0: "Random Multi", 1: "Manual", 2: "Single Peak", 3: "Broadband", 4: "Absorption Peak"}
                 mname = mode_names.get(pass_cfg.get("mode", 0), "?")
                 self.log_signal.emit(
                     f"═══ Training Round {round_idx}/{len(pass_cfgs)}  "
@@ -621,12 +621,32 @@ class LoopRunner(QThread):
                     f"_{sp_tag}"
                     f".csv"
                 )
+            elif mode == 4:
+                center_mode = cfg.get("absorp_center_mode", "fixed")
+                if center_mode == "fixed":
+                    c_tag = f"c{cfg.get('absorp_center_fixed', 645):.0f}nm"
+                else:
+                    c_tag = f"c{cfg.get('absorp_center_min', 625):.0f}-{cfg.get('absorp_center_max', 665):.0f}nm"
+                ndips_mode = cfg.get("absorp_ndips_mode", "fixed")
+                if ndips_mode == "fixed":
+                    d_tag = f"dips{cfg.get('absorp_ndips_fixed', 2)}"
+                else:
+                    d_tag = f"dips{cfg.get('absorp_ndips_min', 1)}-{cfg.get('absorp_ndips_max', 4)}"
+                sp = float(cfg.get("absorp_spacing_nm", 1.0))
+                fname = (
+                    f"nkt_config_absorp"
+                    f"_{c_tag}"
+                    f"_sp{sp:.2f}nm"
+                    f"_{d_tag}"
+                    f"_seed{cfg.get('absorp_seed', 42)}"
+                    f".csv"
+                )
             else:
                 fname = "nkt_config_manual.csv"
 
             path = os.path.join(out_dir, fname)
             with open(path, "w", newline="") as f:
-                mode_str = {0: "random", 1: "manual", 2: "single", 3: "broadband"}.get(mode, "unknown")
+                mode_str = {0: "random", 1: "manual", 2: "single", 3: "broadband", 4: "absorption_peak"}.get(mode, "unknown")
                 f.write(f"# mode={mode_str}\n")
                 for key in ["seed", "n_steps", "n_repeats",
                             "wl_min", "wl_max", "spacing_mode",

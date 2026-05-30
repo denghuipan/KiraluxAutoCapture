@@ -646,6 +646,63 @@ def build_nkt_step_configs(cfg: dict) -> List[dict]:
             })
         return step_cfgs
 
+    # ── Absorption Peak (mode == 4) ───────────────────────────────────────
+    if mode == 4:
+        import numpy as _np2
+        n_steps      = cfg.get("absorp_steps", 50)
+        spacing      = float(cfg.get("absorp_spacing_nm", 1.0))
+        baseline_amp = int(cfg.get("absorp_baseline_amp", 1000))
+        rng          = _np2.random.default_rng(cfg.get("absorp_seed", 42))
+        step_cfgs    = []
+
+        for _ in range(n_steps):
+            # Center wavelength
+            if cfg.get("absorp_center_mode", "fixed") == "fixed":
+                center = float(cfg.get("absorp_center_fixed", 645))
+            else:
+                center = float(rng.uniform(
+                    cfg.get("absorp_center_min", 625),
+                    cfg.get("absorp_center_max", 665),
+                ))
+
+            # 8 channel wavelengths with configurable spacing
+            wls = [center + (i - 3.5) * spacing for i in range(8)]
+            wls = [max(500.0, min(900.0, w)) for w in wls]
+
+            # Number of absorption dips
+            if cfg.get("absorp_ndips_mode", "fixed") == "fixed":
+                n_dips = int(cfg.get("absorp_ndips_fixed", 2))
+            else:
+                n_dips = int(rng.integers(
+                    cfg.get("absorp_ndips_min", 1),
+                    cfg.get("absorp_ndips_max", 4) + 1,
+                ))
+            n_dips = max(0, min(8, n_dips))
+
+            # Select which channels are absorbed
+            dip_indices = rng.choice(8, size=n_dips, replace=False).tolist()
+
+            # Build amplitude array: baseline for all, random dip for selected
+            amps = [baseline_amp] * 8
+            dip_min = int(cfg.get("absorp_dip_amp_min", 200))
+            dip_max = int(cfg.get("absorp_dip_amp_max", 800))
+            for idx in dip_indices:
+                amps[idx] = int(rng.integers(dip_min, dip_max + 1))
+
+            label = (
+                f"Absorp center={center:.1f}nm  "
+                f"spacing={spacing:.2f}nm  "
+                f"ndips={n_dips}  "
+                f"dip=[{dip_min},{dip_max}]"
+            )
+            step_cfgs.append({
+                "wavelengths": wls,
+                "amplitudes":  amps,
+                "emission":    int(cfg.get("absorp_emission_pct", 100)),
+                "label":       label,
+            })
+        return step_cfgs
+
     # ── Random Multi-Peak (mode == 0) ─────────────────────────────────────
     seed = int(cfg.get("seed", 42))
     wl_min = float(cfg.get("wl_min", 620))

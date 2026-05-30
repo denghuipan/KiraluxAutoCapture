@@ -22,7 +22,7 @@ from matplotlib.figure import Figure
 from ui.style_helpers import title, accent, mpl_font_size
 from ui.layout_helpers import (
     install_scroll_content, configure_form_layout, prepare_group_box, GROUP_SPACING,
-    NoScrollSpinBox, NoScrollDoubleSpinBox,
+    NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox,
 )
 from core.camera_support import EXPOSURE_MAX_MS, EXPOSURE_MIN_MS
 
@@ -125,7 +125,7 @@ class CameraTab(QWidget):
         self.edit_prefix = QLineEdit("img_loop")
         self.edit_prefix.setPlaceholderText("e.g. img_loop")
 
-        self.combo_fmt = QComboBox()
+        self.combo_fmt = NoScrollComboBox()
         self.combo_fmt.addItems(["tif  (16-bit TIFF)", "npy  (NumPy array)", "dat  (raw binary)"])
         self.combo_fmt.setCurrentIndex(0)
 

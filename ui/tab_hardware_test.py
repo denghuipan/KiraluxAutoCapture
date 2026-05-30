@@ -12,7 +12,7 @@ import numpy as np
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel, QPushButton,
-    QSlider, QSizePolicy, QFrame, QLineEdit, QMessageBox
+    QSizePolicy, QFrame, QLineEdit, QMessageBox
 )
 from PyQt5.QtCore import Qt, pyqtSlot
 
@@ -23,7 +23,7 @@ from matplotlib.figure import Figure
 
 from core.hw_tester import CameraTestWorker, OSAPingWorker, PMTestWorker, PMZeroWorker
 from ui.style_helpers import title, muted, warning, mpl_font_size
-from ui.layout_helpers import install_scroll_content, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox
+from ui.layout_helpers import install_scroll_content, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollSlider
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ class HardwareTestTab(QWidget):
 
         wl_row.addSpacing(16)
         wl_row.addWidget(QLabel("RF ch0 amp:"))
-        self.nkt_amp_slider = QSlider(Qt.Horizontal)
+        self.nkt_amp_slider = NoScrollSlider(Qt.Horizontal)
         self.nkt_amp_slider.setRange(0, 1000)
         self.nkt_amp_slider.setValue(1000)
         self.nkt_amp_slider.setFixedWidth(160)

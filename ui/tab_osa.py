@@ -7,7 +7,7 @@ import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QGroupBox, QLabel,
-    QLineEdit, QCheckBox, QComboBox, QPushButton,
+    QLineEdit, QCheckBox, QPushButton,
     QSizePolicy, QFileDialog, QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSlot
@@ -25,7 +25,7 @@ from ui.style_helpers import (
 )
 from ui.layout_helpers import (
     install_scroll_content, configure_form_layout, prepare_group_box, GROUP_SPACING,
-    NoScrollSpinBox, NoScrollDoubleSpinBox,
+    NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox,
 )
 
 
@@ -126,11 +126,11 @@ class OSATab(QWidget):
         self.spin_avg.setRange(1, 1000)
         self.spin_avg.setValue(1)
 
-        self.combo_sensitivity = QComboBox()
+        self.combo_sensitivity = NoScrollComboBox()
         self.combo_sensitivity.addItems(["norm", "mid", "high1", "high2", "high3"])
         self.combo_sensitivity.setCurrentText("mid")
 
-        self.combo_smoothing = QComboBox()
+        self.combo_smoothing = NoScrollComboBox()
         self.combo_smoothing.addItems(["OFF", "2", "4", "8", "16", "32"])
 
         form_m.addRow("WL start:", self.spin_wl_start)

@@ -365,6 +365,66 @@ class TestDataTab(QWidget):
         self._on_coupling_changed()
         self._on_wl_source_changed(0)
 
+        # ── Bright Field Pre-capture ──────────────────────────────────────────
+        grp_bright = QGroupBox("Bright Field Pre-capture")
+        form_b = QFormLayout(grp_bright)
+        configure_form_layout(form_b)
+
+        self.chk_bright_enabled = QCheckBox(
+            "Enable bright field pre-capture per wavelength"
+        )
+        self.chk_bright_enabled.setChecked(False)
+        self.chk_bright_enabled.setToolTip(
+            "Before the power servo loop for each wavelength, capture a series of\n"
+            "images at full RF power with multiple exposure times.\n"
+            "Saved to bright/ subfolder; no OSA measurement in this phase."
+        )
+
+        # Container widget — hidden when unchecked
+        bright_inner = QWidget()
+        form_bi = QFormLayout(bright_inner)
+        configure_form_layout(form_bi)
+
+        self.spin_bright_rf_amp = NoScrollSpinBox()
+        self.spin_bright_rf_amp.setRange(0, 1000)
+        self.spin_bright_rf_amp.setValue(1000)
+        self.spin_bright_rf_amp.setToolTip(
+            "RF amplitude (0–1000) used during bright-field captures."
+        )
+
+        self.spin_bright_settle_s = NoScrollDoubleSpinBox()
+        self.spin_bright_settle_s.setRange(0.0, 10.0)
+        self.spin_bright_settle_s.setValue(0.5)
+        self.spin_bright_settle_s.setDecimals(2)
+        self.spin_bright_settle_s.setSuffix("  s")
+        self.spin_bright_settle_s.setToolTip(
+            "Wait this long after setting bright RF amplitude before capturing."
+        )
+
+        self.edit_bright_exposures = QLineEdit("100, 500, 1000, 2000, 5000")
+        self.edit_bright_exposures.setPlaceholderText("comma-separated ms values")
+        self.edit_bright_exposures.setToolTip(
+            "List of camera exposure times (ms) for bright-field captures.\n"
+            "One image is saved per exposure value, per wavelength."
+        )
+
+        bright_hint_lbl = QLabel("Images saved to bright/ subfolder, no OSA")
+        bright_hint_lbl.setStyleSheet(hint())
+
+        form_bi.addRow("RF amplitude:", self.spin_bright_rf_amp)
+        form_bi.addRow("Settle time (s):", self.spin_bright_settle_s)
+        form_bi.addRow("Exposure times (ms):", self.edit_bright_exposures)
+        form_bi.addRow(bright_hint_lbl)
+
+        form_b.addRow(self.chk_bright_enabled)
+        form_b.addRow(bright_inner)
+
+        self.chk_bright_enabled.toggled.connect(bright_inner.setVisible)
+        bright_inner.setVisible(False)
+
+        prepare_group_box(grp_bright)
+        root.addWidget(grp_bright)
+
         # ── Real-time PM reading monitor (power vs time, PM100D-style) ─────────
         grp_pm_monitor = QGroupBox("Real-Time Power Trace")
         pm_monitor_layout = QVBoxLayout(grp_pm_monitor)
@@ -1047,6 +1107,10 @@ class TestDataTab(QWidget):
             "test_log_csv": self.edit_log.text().strip() or "test_data_log.csv",
             "test_use_camera_tab": self.chk_use_camera_tab.isChecked(),
             "test_repeats": self.spin_repeats.value(),
+            "bright_enabled": self.chk_bright_enabled.isChecked(),
+            "bright_rf_amp": self.spin_bright_rf_amp.value(),
+            "bright_settle_s": self.spin_bright_settle_s.value(),
+            "bright_exposures_ms": self.edit_bright_exposures.text().strip(),
         }
         if not self.chk_use_camera_tab.isChecked():
             cfg["test_exposure_ms"] = self.spin_exposure.value()
@@ -1109,3 +1173,11 @@ class TestDataTab(QWidget):
             self.edit_log.setText(str(cfg["test_log_csv"]))
         if "test_repeats" in cfg:
             self.spin_repeats.setValue(int(cfg["test_repeats"]))
+        if "bright_enabled" in cfg:
+            self.chk_bright_enabled.setChecked(bool(cfg["bright_enabled"]))
+        if "bright_rf_amp" in cfg:
+            self.spin_bright_rf_amp.setValue(int(cfg["bright_rf_amp"]))
+        if "bright_settle_s" in cfg:
+            self.spin_bright_settle_s.setValue(float(cfg["bright_settle_s"]))
+        if "bright_exposures_ms" in cfg:
+            self.edit_bright_exposures.setText(str(cfg["bright_exposures_ms"]))

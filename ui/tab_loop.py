@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt
 from ui.style_helpers import checkbox_emphasis, muted, accent, success, error
 from ui.layout_helpers import install_scroll_content, configure_form_layout, prepare_group_box, NoScrollSpinBox, NoScrollDoubleSpinBox, NoScrollComboBox
 
-MODE_LABELS = ("Random Multi-Peak", "Manual Multi-Peak", "Single Peak Scan", "Broadband")
+MODE_LABELS = ("Random Multi-Peak", "Manual Multi-Peak", "Single Peak Scan", "Broadband", "Absorption Peak")
 
 
 class LoopTab(QWidget):
@@ -102,6 +102,7 @@ class LoopTab(QWidget):
             "Manual Multi-Peak  (from NKT tab)",
             "Single Peak Scan  (1ch wavelength sweep)",
             "Broadband (8ch)",
+            "Absorption Peak (8ch)",
         ])
         self.combo_mode.setMinimumWidth(300)
         self.combo_mode.currentIndexChanged.connect(self._on_mode_changed)
@@ -463,6 +464,135 @@ class LoopTab(QWidget):
         prepare_group_box(self.grp_broadband)
         root.addWidget(self.grp_broadband)
 
+        # ── Absorption Peak config ────────────────────────────────────────
+        self.grp_absorp = QGroupBox("Absorption Peak Config  (8 ch)")
+        form_ap = QFormLayout(self.grp_absorp)
+        configure_form_layout(form_ap)
+
+        self.spin_absorp_steps = NoScrollSpinBox()
+        self.spin_absorp_steps.setRange(1, 9999)
+        self.spin_absorp_steps.setValue(50)
+
+        self.spin_absorp_spacing_nm = NoScrollDoubleSpinBox()
+        self.spin_absorp_spacing_nm.setRange(0.1, 5.0)
+        self.spin_absorp_spacing_nm.setValue(1.0)
+        self.spin_absorp_spacing_nm.setSuffix("  nm")
+        self.spin_absorp_spacing_nm.setDecimals(2)
+        self.spin_absorp_spacing_nm.setSingleStep(0.1)
+
+        # ── Center wavelength ─────────────────────────────────────────────
+        self.combo_absorp_center_mode = NoScrollComboBox()
+        self.combo_absorp_center_mode.addItems(["Fixed", "Random range"])
+        self.combo_absorp_center_mode.setFixedWidth(120)
+        self.combo_absorp_center_mode.currentIndexChanged.connect(
+            self._on_absorp_center_mode_changed)
+
+        self.spin_absorp_center_fixed = NoScrollDoubleSpinBox()
+        self.spin_absorp_center_fixed.setRange(500, 900)
+        self.spin_absorp_center_fixed.setValue(645.0)
+        self.spin_absorp_center_fixed.setSuffix("  nm")
+        self.spin_absorp_center_fixed.setDecimals(1)
+
+        self.spin_absorp_center_min = NoScrollDoubleSpinBox()
+        self.spin_absorp_center_min.setRange(500, 900)
+        self.spin_absorp_center_min.setValue(625.0)
+        self.spin_absorp_center_min.setSuffix("  nm")
+        self.spin_absorp_center_min.setDecimals(1)
+
+        self._lbl_absorp_center_to = QLabel(" – ")
+
+        self.spin_absorp_center_max = NoScrollDoubleSpinBox()
+        self.spin_absorp_center_max.setRange(500, 900)
+        self.spin_absorp_center_max.setValue(665.0)
+        self.spin_absorp_center_max.setSuffix("  nm")
+        self.spin_absorp_center_max.setDecimals(1)
+
+        _absorp_center_w = QWidget()
+        _absorp_center_lay = QHBoxLayout(_absorp_center_w)
+        _absorp_center_lay.setContentsMargins(0, 0, 0, 0)
+        _absorp_center_lay.addWidget(self.combo_absorp_center_mode)
+        _absorp_center_lay.addSpacing(8)
+        _absorp_center_lay.addWidget(self.spin_absorp_center_fixed)
+        _absorp_center_lay.addWidget(self.spin_absorp_center_min)
+        _absorp_center_lay.addWidget(self._lbl_absorp_center_to)
+        _absorp_center_lay.addWidget(self.spin_absorp_center_max)
+        _absorp_center_lay.addStretch()
+
+        # ── Baseline amplitude ────────────────────────────────────────────
+        self.spin_absorp_baseline_amp = NoScrollSpinBox()
+        self.spin_absorp_baseline_amp.setRange(0, 1000)
+        self.spin_absorp_baseline_amp.setValue(1000)
+
+        # ── Number of dips ────────────────────────────────────────────────
+        self.combo_absorp_ndips_mode = NoScrollComboBox()
+        self.combo_absorp_ndips_mode.addItems(["Fixed", "Random range"])
+        self.combo_absorp_ndips_mode.setFixedWidth(120)
+        self.combo_absorp_ndips_mode.currentIndexChanged.connect(
+            self._on_absorp_ndips_mode_changed)
+
+        self.spin_absorp_ndips_fixed = NoScrollSpinBox()
+        self.spin_absorp_ndips_fixed.setRange(1, 8)
+        self.spin_absorp_ndips_fixed.setValue(2)
+
+        self.spin_absorp_ndips_min = NoScrollSpinBox()
+        self.spin_absorp_ndips_min.setRange(1, 8)
+        self.spin_absorp_ndips_min.setValue(1)
+
+        self._lbl_absorp_ndips_to = QLabel(" – ")
+
+        self.spin_absorp_ndips_max = NoScrollSpinBox()
+        self.spin_absorp_ndips_max.setRange(1, 8)
+        self.spin_absorp_ndips_max.setValue(4)
+
+        _absorp_ndips_w = QWidget()
+        _absorp_ndips_lay = QHBoxLayout(_absorp_ndips_w)
+        _absorp_ndips_lay.setContentsMargins(0, 0, 0, 0)
+        _absorp_ndips_lay.addWidget(self.combo_absorp_ndips_mode)
+        _absorp_ndips_lay.addSpacing(8)
+        _absorp_ndips_lay.addWidget(self.spin_absorp_ndips_fixed)
+        _absorp_ndips_lay.addWidget(self.spin_absorp_ndips_min)
+        _absorp_ndips_lay.addWidget(self._lbl_absorp_ndips_to)
+        _absorp_ndips_lay.addWidget(self.spin_absorp_ndips_max)
+        _absorp_ndips_lay.addStretch()
+
+        # ── Dip amplitude range ───────────────────────────────────────────
+        self.spin_absorp_dip_amp_min = NoScrollSpinBox()
+        self.spin_absorp_dip_amp_min.setRange(0, 1000)
+        self.spin_absorp_dip_amp_min.setValue(200)
+
+        self.spin_absorp_dip_amp_max = NoScrollSpinBox()
+        self.spin_absorp_dip_amp_max.setRange(0, 1000)
+        self.spin_absorp_dip_amp_max.setValue(800)
+
+        _absorp_dip_w = QWidget()
+        _absorp_dip_lay = QHBoxLayout(_absorp_dip_w)
+        _absorp_dip_lay.setContentsMargins(0, 0, 0, 0)
+        _absorp_dip_lay.addWidget(self.spin_absorp_dip_amp_min)
+        _absorp_dip_lay.addWidget(QLabel(" – "))
+        _absorp_dip_lay.addWidget(self.spin_absorp_dip_amp_max)
+        _absorp_dip_lay.addWidget(QLabel("  (absorbed channels)"))
+        _absorp_dip_lay.addStretch()
+
+        self.spin_absorp_emission_pct = NoScrollSpinBox()
+        self.spin_absorp_emission_pct.setRange(0, 100)
+        self.spin_absorp_emission_pct.setValue(100)
+        self.spin_absorp_emission_pct.setSuffix("  %")
+
+        self.spin_absorp_seed = NoScrollSpinBox()
+        self.spin_absorp_seed.setRange(0, 99999)
+        self.spin_absorp_seed.setValue(42)
+
+        form_ap.addRow("N steps:", self.spin_absorp_steps)
+        form_ap.addRow("Channel spacing:", self.spin_absorp_spacing_nm)
+        form_ap.addRow("Center wavelength:", _absorp_center_w)
+        form_ap.addRow("Baseline amplitude:", self.spin_absorp_baseline_amp)
+        form_ap.addRow("N absorption dips:", _absorp_ndips_w)
+        form_ap.addRow("Dip amplitude range:", _absorp_dip_w)
+        form_ap.addRow("Emission:", self.spin_absorp_emission_pct)
+        form_ap.addRow("Seed:", self.spin_absorp_seed)
+        prepare_group_box(self.grp_absorp)
+        root.addWidget(self.grp_absorp)
+
         # Repeat & timing
         grp_rep = QGroupBox("Repeat & Timing")
         form_rep = QFormLayout(grp_rep)
@@ -564,6 +694,12 @@ class LoopTab(QWidget):
                   self.spin_bb_spacing_fixed, self.spin_bb_spacing_min, self.spin_bb_spacing_max,
                   self.spin_bb_amp_fixed, self.spin_bb_amp_min, self.spin_bb_amp_max,
                   self.spin_bb_emission_pct, self.spin_bb_seed,
+                  self.spin_absorp_steps, self.spin_absorp_spacing_nm,
+                  self.spin_absorp_center_fixed, self.spin_absorp_center_min, self.spin_absorp_center_max,
+                  self.spin_absorp_baseline_amp,
+                  self.spin_absorp_ndips_fixed, self.spin_absorp_ndips_min, self.spin_absorp_ndips_max,
+                  self.spin_absorp_dip_amp_min, self.spin_absorp_dip_amp_max,
+                  self.spin_absorp_emission_pct, self.spin_absorp_seed,
                   self.spin_inline_test_pct, self.spin_inline_test_seed_offset,
                   ] + self.spins_bb_amp_manual:
             w.valueChanged.connect(self._update_summary)
@@ -577,11 +713,14 @@ class LoopTab(QWidget):
         self._on_bb_center_mode_changed(0)
         self._on_bb_spacing_mode_changed(0)
         self._on_bb_amp_mode_changed(0)
+        self._on_absorp_center_mode_changed(0)
+        self._on_absorp_ndips_mode_changed(0)
 
     def _on_mode_changed(self, idx: int):
         self.grp_random.setVisible(idx == 0)
         self.grp_single.setVisible(idx == 2)
         self.grp_broadband.setVisible(idx == 3)
+        self.grp_absorp.setVisible(idx == 4)
         self._update_summary()
 
     def _on_spacing_changed(self, idx: int):
@@ -625,6 +764,22 @@ class LoopTab(QWidget):
         self._bb_amp_rand_widget.setVisible(idx == 1)
         self._lbl_bb_amp_manual.setVisible(idx == 2)
         self._bb_amp_manual_widget.setVisible(idx == 2)
+        self._update_summary()
+
+    def _on_absorp_center_mode_changed(self, idx: int):
+        is_random = (idx == 1)
+        self.spin_absorp_center_fixed.setVisible(not is_random)
+        self.spin_absorp_center_min.setVisible(is_random)
+        self._lbl_absorp_center_to.setVisible(is_random)
+        self.spin_absorp_center_max.setVisible(is_random)
+        self._update_summary()
+
+    def _on_absorp_ndips_mode_changed(self, idx: int):
+        is_random = (idx == 1)
+        self.spin_absorp_ndips_fixed.setVisible(not is_random)
+        self.spin_absorp_ndips_min.setVisible(is_random)
+        self._lbl_absorp_ndips_to.setVisible(is_random)
+        self.spin_absorp_ndips_max.setVisible(is_random)
         self._update_summary()
 
     def _on_inline_test_toggled(self, checked: bool):
@@ -723,6 +878,35 @@ class LoopTab(QWidget):
             )
             return
 
+        if mode == 4:
+            n_steps = self.spin_absorp_steps.value()
+            total = n_steps * n_repeats
+            spacing = self.spin_absorp_spacing_nm.value()
+            baseline = self.spin_absorp_baseline_amp.value()
+            center_mode = self.combo_absorp_center_mode.currentIndex()
+            if center_mode == 0:
+                center_info = f"center={self.spin_absorp_center_fixed.value():.1f}nm (fixed)"
+            else:
+                c_mn = self.spin_absorp_center_min.value()
+                c_mx = self.spin_absorp_center_max.value()
+                center_info = f"center∈[{c_mn:.1f}–{c_mx:.1f}]nm (random)"
+            ndips_mode = self.combo_absorp_ndips_mode.currentIndex()
+            if ndips_mode == 0:
+                ndips_info = f"ndips={self.spin_absorp_ndips_fixed.value()} (fixed)"
+            else:
+                nd_mn = self.spin_absorp_ndips_min.value()
+                nd_mx = self.spin_absorp_ndips_max.value()
+                ndips_info = f"ndips∈[{nd_mn}–{nd_mx}] (random)"
+            dip_min = self.spin_absorp_dip_amp_min.value()
+            dip_max = self.spin_absorp_dip_amp_max.value()
+            self.lbl_summary.setText(
+                f"  Absorption Peak 8ch: spacing={spacing:.2f}nm,  {center_info}\n"
+                f"  baseline={baseline},  {ndips_info},  dip amp∈[{dip_min}–{dip_max}]\n"
+                f"  {n_steps} configs × {n_repeats} repeats = {total} captures\n"
+                f"  seed={self.spin_absorp_seed.value()}"
+            )
+            return
+
         n_steps = self.spin_steps.value()
         total   = n_steps * n_repeats
         wl_min  = self.spin_wl_min.value()
@@ -770,6 +954,8 @@ class LoopTab(QWidget):
             n_steps = max(1, math.floor((wl_max - wl_min) / step) + 1)
         elif mode == 3:
             n_steps = self.spin_bb_steps.value()
+        elif mode == 4:
+            n_steps = self.spin_absorp_steps.value()
         else:
             n_steps = self.spin_steps.value()
 
@@ -827,6 +1013,25 @@ class LoopTab(QWidget):
                 "bb_emission_pct":   self.spin_bb_emission_pct.value(),
                 "bb_seed":           self.spin_bb_seed.value(),
                 "bb_steps":          self.spin_bb_steps.value(),
+            })
+
+        if mode == 4:
+            base.update({
+                "absorp_steps":          self.spin_absorp_steps.value(),
+                "absorp_spacing_nm":     self.spin_absorp_spacing_nm.value(),
+                "absorp_center_mode":    "fixed" if self.combo_absorp_center_mode.currentIndex() == 0 else "random",
+                "absorp_center_fixed":   self.spin_absorp_center_fixed.value(),
+                "absorp_center_min":     self.spin_absorp_center_min.value(),
+                "absorp_center_max":     self.spin_absorp_center_max.value(),
+                "absorp_baseline_amp":   self.spin_absorp_baseline_amp.value(),
+                "absorp_ndips_mode":     "fixed" if self.combo_absorp_ndips_mode.currentIndex() == 0 else "random",
+                "absorp_ndips_fixed":    self.spin_absorp_ndips_fixed.value(),
+                "absorp_ndips_min":      self.spin_absorp_ndips_min.value(),
+                "absorp_ndips_max":      self.spin_absorp_ndips_max.value(),
+                "absorp_dip_amp_min":    self.spin_absorp_dip_amp_min.value(),
+                "absorp_dip_amp_max":    self.spin_absorp_dip_amp_max.value(),
+                "absorp_emission_pct":   self.spin_absorp_emission_pct.value(),
+                "absorp_seed":           self.spin_absorp_seed.value(),
             })
 
         return base
@@ -972,6 +1177,27 @@ class LoopTab(QWidget):
             self._on_bb_center_mode_changed(self.combo_bb_center_mode.currentIndex())
             self._on_bb_spacing_mode_changed(self.combo_bb_spacing_mode.currentIndex())
             self._on_bb_amp_mode_changed(self.combo_bb_amp_mode.currentIndex())
+            # Absorption Peak fields
+            _absorp_mode_map = {"fixed": 0, "random": 1}
+            self.spin_absorp_steps.setValue(int(cfg.get("absorp_steps", 50)))
+            self.spin_absorp_spacing_nm.setValue(float(cfg.get("absorp_spacing_nm", 1.0)))
+            self.combo_absorp_center_mode.setCurrentIndex(
+                _absorp_mode_map.get(cfg.get("absorp_center_mode", "fixed"), 0))
+            self.spin_absorp_center_fixed.setValue(float(cfg.get("absorp_center_fixed", 645.0)))
+            self.spin_absorp_center_min.setValue(float(cfg.get("absorp_center_min", 625.0)))
+            self.spin_absorp_center_max.setValue(float(cfg.get("absorp_center_max", 665.0)))
+            self.spin_absorp_baseline_amp.setValue(int(cfg.get("absorp_baseline_amp", 1000)))
+            self.combo_absorp_ndips_mode.setCurrentIndex(
+                _absorp_mode_map.get(cfg.get("absorp_ndips_mode", "fixed"), 0))
+            self.spin_absorp_ndips_fixed.setValue(int(cfg.get("absorp_ndips_fixed", 2)))
+            self.spin_absorp_ndips_min.setValue(int(cfg.get("absorp_ndips_min", 1)))
+            self.spin_absorp_ndips_max.setValue(int(cfg.get("absorp_ndips_max", 4)))
+            self.spin_absorp_dip_amp_min.setValue(int(cfg.get("absorp_dip_amp_min", 200)))
+            self.spin_absorp_dip_amp_max.setValue(int(cfg.get("absorp_dip_amp_max", 800)))
+            self.spin_absorp_emission_pct.setValue(int(cfg.get("absorp_emission_pct", 100)))
+            self.spin_absorp_seed.setValue(int(cfg.get("absorp_seed", 42)))
+            self._on_absorp_center_mode_changed(self.combo_absorp_center_mode.currentIndex())
+            self._on_absorp_ndips_mode_changed(self.combo_absorp_ndips_mode.currentIndex())
             self.chk_inline_test.setChecked(bool(cfg.get("inline_test_enabled", False)))
             self.spin_inline_test_pct.setValue(float(cfg.get("inline_test_pct", 10.0)))
             self.spin_inline_test_seed_offset.setValue(

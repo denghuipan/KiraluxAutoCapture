@@ -4,7 +4,7 @@ Changes apply immediately (live preview) and are saved on OK.
 """
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QGroupBox, QLabel, QComboBox,
+    QGroupBox, QLabel,
     QDialogButtonBox, QPushButton, QFontComboBox,
     QApplication
 )
@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 
 from core.app_settings import get_settings, APP_NAME, APP_VERSION
-from ui.layout_helpers import NoScrollSpinBox
+from ui.layout_helpers import NoScrollSpinBox, NoScrollComboBox
 
 
 class SettingsDialog(QDialog):
@@ -38,7 +38,7 @@ class SettingsDialog(QDialog):
         form_a.setHorizontalSpacing(16)
         form_a.setVerticalSpacing(10)
 
-        self.combo_theme = QComboBox()
+        self.combo_theme = NoScrollComboBox()
         self.combo_theme.addItem("Dark",  "dark")
         self.combo_theme.addItem("Light", "light")
         idx = 0 if self._settings.theme() == "dark" else 1
